@@ -50,8 +50,6 @@ homebrew_casks:
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: https://github.com/AIluffy/tildewire
     description: Terminal daily technical signal radar for developers.
-    url:
-      verified: github.com/AIluffy/tildewire/
     hooks:
       post:
         install: |
