@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "skills": {
+    "Effective Go": {
+      "source": "openshift/hypershift",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/effective-go/SKILL.md",
+      "computedHash": "c706661bf057a9e606dd4ebced1785e01ced3be25d98c92e0cfdbdc27ea692fc"
+    },
+    "charm-stack": {
+      "source": "yurifrl/cly",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/charm-stack/SKILL.md",
+      "computedHash": "a6ab334b5d9e1d901283a02f0f063c261019d0d15c38b09e7c1c25754a16da47"
+    },
+    "clean-architecture": {
+      "source": "mindrally/skills",
+      "sourceType": "github",
+      "skillPath": "clean-architecture/SKILL.md",
+      "computedHash": "c5b03a3910c3e63eb9ae08bb782e9d67408212d989255def392944a03041b7ab"
+    },
+    "clean-code": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "skillPath": "skills/clean-code/SKILL.md",
+      "computedHash": "74bf6ded4f61ddcb593e7a29beb96c284f888cbe0639ad6e23710447c36ff19a"
+    },
+    "golang-design-patterns": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-design-patterns/SKILL.md",
+      "computedHash": "668f96fc416246b08414ab327f441a11162950303e1634574afdd7cd8e57ec5c"
+    },
+    "golang-pro": {
+      "source": "jeffallan/claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/golang-pro/SKILL.md",
+      "computedHash": "12b4cac8f65228f82cbc26f0da9232aba87ffa45ccd01afa3998fb8ec61dc288"
+    }
+  }
+}

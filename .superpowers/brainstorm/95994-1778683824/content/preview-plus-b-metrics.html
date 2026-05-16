@@ -1,0 +1,71 @@
+<h2>Preview+ B: Metric Row Style</h2>
+<p class="subtitle">Same compact headline layout, different rules for the first signal row.</p>
+
+<div class="cards">
+  <div class="card" data-choice="native-first" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:#111827; color:#E5E7EB; border-radius:8px; padding:14px; line-height:1.35; min-height:300px;">
+        <div style="display:flex; justify-content:space-between; color:#A78BFA; font-weight:700;"><span>PREVIEW</span><span>[GH]</span></div>
+        <div style="margin-top:12px; color:#60A5FA; font-weight:700;">openai/codex</div>
+        <div style="margin-top:8px; color:#FBBF24;">#2 daily · ★18.4k · +812 today · 77 forks</div>
+        <div style="margin-top:10px;">A lightweight coding agent that runs in your terminal and edits projects locally.</div>
+        <div style="margin-top:12px; color:#9CA3AF;">Go · agent · cli · developer-tools</div>
+        <hr style="border:0; border-top:1px solid #374151; margin:14px 0;">
+        <div style="display:flex; justify-content:space-between; color:#A78BFA; font-weight:700;"><span>PREVIEW</span><span>[HN]</span></div>
+        <div style="margin-top:8px; color:#60A5FA; font-weight:700;">SQLite discussion</div>
+        <div style="margin-top:8px; color:#FBBF24;">#6 top · 421 pts · 88 comments</div>
+        <div style="margin-top:10px;">A deep thread about SQLite internals and production tradeoffs.</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Source-Native First</h3>
+      <p>Show each source's natural numbers first: stars for GitHub, points for HN, votes for Product Hunt. Hot score stays hidden or secondary.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="hot-first" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:#111827; color:#E5E7EB; border-radius:8px; padding:14px; line-height:1.35; min-height:300px;">
+        <div style="display:flex; justify-content:space-between; color:#A78BFA; font-weight:700;"><span>PREVIEW</span><span>[GH]</span></div>
+        <div style="margin-top:12px; color:#60A5FA; font-weight:700;">openai/codex</div>
+        <div style="margin-top:8px; color:#34D399;">hot 93 · #2 daily · GitHub</div>
+        <div style="margin-top:4px; color:#FBBF24;">★18.4k · +812 today · 77 forks</div>
+        <div style="margin-top:10px;">A lightweight coding agent that runs in your terminal and edits projects locally.</div>
+        <hr style="border:0; border-top:1px solid #374151; margin:14px 0;">
+        <div style="display:flex; justify-content:space-between; color:#A78BFA; font-weight:700;"><span>PREVIEW</span><span>[HN]</span></div>
+        <div style="margin-top:8px; color:#60A5FA; font-weight:700;">SQLite discussion</div>
+        <div style="margin-top:8px; color:#34D399;">hot 87 · #6 top · Hacker News</div>
+        <div style="margin-top:4px; color:#FBBF24;">421 pts · 88 comments</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Hot-First Hybrid</h3>
+      <p>Lead with tildewire's cross-source hot score, then source-native metrics. Better for All view comparison, but costs one extra line.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="content-tight" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:#111827; color:#E5E7EB; border-radius:8px; padding:14px; line-height:1.35; min-height:300px;">
+        <div style="display:flex; justify-content:space-between; color:#A78BFA; font-weight:700;"><span>PREVIEW</span><span>[GH] #2</span></div>
+        <div style="margin-top:12px; color:#60A5FA; font-weight:700;">openai/codex</div>
+        <div style="margin-top:8px;">A lightweight coding agent that runs in your terminal and edits projects locally.</div>
+        <div style="margin-top:10px; color:#9CA3AF;">Go · agent · cli</div>
+        <div style="margin-top:8px; color:#FBBF24;">★18.4k · +812 today · 77 forks</div>
+        <hr style="border:0; border-top:1px solid #374151; margin:14px 0;">
+        <div style="display:flex; justify-content:space-between; color:#A78BFA; font-weight:700;"><span>PREVIEW</span><span>[HN] #6</span></div>
+        <div style="margin-top:8px; color:#60A5FA; font-weight:700;">SQLite discussion</div>
+        <div style="margin-top:8px;">A deep thread about SQLite internals and production tradeoffs.</div>
+        <div style="margin-top:10px; color:#FBBF24;">421 pts · 88 comments</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Content-Tight</h3>
+      <p>Keep title and summary as the first read, with metrics beneath. Stronger for content, weaker for fast heat comparison.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="subtitle">Recommendation: A. It preserves compactness and uses the numbers users already understand for each source.</p>
+</div>

@@ -1,0 +1,67 @@
+<h2>Preview+ Layout Direction</h2>
+<p class="subtitle">Goal: help users decide faster using heat signals plus content cues, without loading network detail.</p>
+
+<div class="cards">
+  <div class="card" data-choice="signal-stack" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:#111827; color:#E5E7EB; border-radius:8px; padding:14px; line-height:1.35; min-height:260px;">
+        <div style="color:#A78BFA; font-weight:700;">PREVIEW</div>
+        <div style="margin-top:12px; color:#60A5FA; font-weight:700;">[GH] openai/codex</div>
+        <div style="color:#9CA3AF;">#2 daily · Go · repo</div>
+        <div style="margin-top:10px; color:#FBBF24;">★ 18.4k · +812 today · 77 forks</div>
+        <div style="color:#34D399;">hot 93 · first seen 2h ago</div>
+        <div style="margin-top:12px;">A lightweight coding agent that runs in your terminal and edits projects locally.</div>
+        <div style="margin-top:12px; color:#9CA3AF;">tags: agent, cli, developer-tools</div>
+        <div style="margin-top:14px; color:#94A3B8;">url: github.com/openai/codex</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Signal Stack</h3>
+      <p>Title, source context, metrics, then summary. Strongest for quick triage and keeps a predictable reading order.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="compact-headline" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:#111827; color:#E5E7EB; border-radius:8px; padding:14px; line-height:1.35; min-height:260px;">
+        <div style="display:flex; justify-content:space-between; color:#A78BFA; font-weight:700;">
+          <span>PREVIEW</span><span>[GH]</span>
+        </div>
+        <div style="margin-top:12px; color:#60A5FA; font-weight:700;">openai/codex</div>
+        <div style="margin-top:8px; color:#FBBF24;">#2 · ★18.4k · +812 · 77 forks</div>
+        <div style="margin-top:10px;">A lightweight coding agent that runs in your terminal and edits projects locally.</div>
+        <div style="margin-top:12px; color:#9CA3AF;">Go · agent · cli · developer-tools</div>
+        <div style="margin-top:12px; color:#34D399;">hot 93 · source: daily</div>
+        <div style="margin-top:14px; color:#94A3B8;">enter detail · o open · s save</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Compact Headline</h3>
+      <p>Maximum density in the first few lines. Best for small terminals, but can become visually crowded.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="content-first" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:#111827; color:#E5E7EB; border-radius:8px; padding:14px; line-height:1.35; min-height:260px;">
+        <div style="color:#A78BFA; font-weight:700;">PREVIEW</div>
+        <div style="margin-top:12px; color:#60A5FA; font-weight:700;">openai/codex</div>
+        <div style="margin-top:8px;">A lightweight coding agent that runs in your terminal and edits projects locally.</div>
+        <div style="margin-top:14px; color:#9CA3AF;">why it matters</div>
+        <div>repo · Go · agent · developer-tools</div>
+        <div style="margin-top:14px; color:#9CA3AF;">signals</div>
+        <div style="color:#FBBF24;">#2 daily · ★18.4k · +812 today</div>
+        <div style="color:#34D399;">hot 93 · 2h ago</div>
+        <div style="margin-top:14px; color:#94A3B8;">github.com/openai/codex</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Content First</h3>
+      <p>Summary before metrics. Better for reading intent, weaker for rapid hotness comparison across many items.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="subtitle">Recommendation: A. It gives preview a stable scan order: identity, source/rank, metrics, content, tags, links.</p>
+</div>
