@@ -33,6 +33,7 @@ archives:
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - README.md
+      - LICENSE
       - docs/RELEASE_NOTES.md
       - scripts/install.sh
       - scripts/install-local.sh
@@ -48,6 +49,7 @@ brews:
     directory: Formula
     homepage: https://github.com/AIluffy/tildewire
     description: Terminal daily technical signal radar for developers.
+    license: MIT
     test: |
       system "#{bin}/tildewire", "--version"
 
@@ -66,6 +68,7 @@ nfpms:
     maintainer: AIluffy
     vendor: tildewire
     homepage: https://github.com/AIluffy/tildewire
+    license: MIT
     description: Terminal daily technical signal radar for developers.
 
 checksum:

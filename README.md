@@ -482,3 +482,7 @@ Bubble Tea `Update()` methods do not perform blocking I/O directly. I/O flows th
 - [Technical design](docs/TECHNICAL_DESIGN.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Release notes](docs/RELEASE_NOTES.md)
+
+## License
+
+tildewire is released under the [MIT License](LICENSE).
