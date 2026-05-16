@@ -37,6 +37,20 @@ archives:
       - scripts/install.sh
       - scripts/install-local.sh
 
+brews:
+  - name: tildewire
+    ids:
+      - default
+    repository:
+      owner: AIluffy
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/AIluffy/tildewire
+    description: Terminal daily technical signal radar for developers.
+    test: |
+      system "#{bin}/tildewire", "--version"
+
 nfpms:
   - id: linux-packages
     package_name: tildewire

@@ -17,6 +17,16 @@ There are no `fetch`, `list`, `export`, `cache`, or `config` subcommands. Scanni
 
 ## Installation
 
+### Homebrew
+
+Install the canonical binary on macOS or Linux with the tildewire tap:
+
+```bash
+brew install AIluffy/tap/tildewire
+```
+
+The Homebrew formula installs `tildewire` only. Use the install script if you want conflict-safe `tw` setup.
+
 ### Install Script
 
 For macOS and Linux, install the latest GitHub Release binary:
