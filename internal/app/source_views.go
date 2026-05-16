@@ -3,7 +3,7 @@ package app
 import (
 	"strings"
 
-	"github.com/zhangxueai/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/domain"
 )
 
 // SourceView describes one selectable source-native feed slice.

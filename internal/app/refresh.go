@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zhangxueai/tildewire/internal/domain"
-	"github.com/zhangxueai/tildewire/internal/httpx"
+	"github.com/AIluffy/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/httpx"
 )
 
 // Refresh refreshes enabled source scopes, persists data, and returns a new snapshot.

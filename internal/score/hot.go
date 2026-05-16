@@ -4,7 +4,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/zhangxueai/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/domain"
 )
 
 // Hot computes the explainable v0.1 merged-feed score.

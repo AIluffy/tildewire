@@ -10,10 +10,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 
-	"github.com/zhangxueai/tildewire/internal/app"
-	"github.com/zhangxueai/tildewire/internal/config"
-	"github.com/zhangxueai/tildewire/internal/domain"
-	tuiimage "github.com/zhangxueai/tildewire/internal/tui/image"
+	"github.com/AIluffy/tildewire/internal/app"
+	"github.com/AIluffy/tildewire/internal/config"
+	"github.com/AIluffy/tildewire/internal/domain"
+	tuiimage "github.com/AIluffy/tildewire/internal/tui/image"
 )
 
 // FeedService is the application surface used by the TUI.

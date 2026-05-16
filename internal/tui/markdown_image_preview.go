@@ -9,10 +9,10 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	kittygfx "github.com/charmbracelet/x/ansi/kitty"
 
-	"github.com/zhangxueai/tildewire/internal/config"
-	"github.com/zhangxueai/tildewire/internal/tui/githubreadme"
-	tuiimage "github.com/zhangxueai/tildewire/internal/tui/image"
-	md "github.com/zhangxueai/tildewire/internal/tui/markdown"
+	"github.com/AIluffy/tildewire/internal/config"
+	"github.com/AIluffy/tildewire/internal/tui/githubreadme"
+	tuiimage "github.com/AIluffy/tildewire/internal/tui/image"
+	md "github.com/AIluffy/tildewire/internal/tui/markdown"
 )
 
 const (

@@ -10,9 +10,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/zhangxueai/tildewire/internal/dedupe"
-	"github.com/zhangxueai/tildewire/internal/domain"
-	"github.com/zhangxueai/tildewire/internal/store/generated"
+	"github.com/AIluffy/tildewire/internal/dedupe"
+	"github.com/AIluffy/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/store/generated"
 )
 
 // UpsertFeedItems writes normalized items, source context, tags, and default state.

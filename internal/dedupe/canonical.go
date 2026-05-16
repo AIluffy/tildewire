@@ -4,8 +4,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/zhangxueai/tildewire/internal/domain"
-	"github.com/zhangxueai/tildewire/internal/normalize"
+	"github.com/AIluffy/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/normalize"
 )
 
 // CanonicalizeItems applies the v0.1 strong-key strategy to a batch of items.

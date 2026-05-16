@@ -49,9 +49,9 @@ nfpms:
     bindir: /usr/bin
     section: utils
     priority: optional
-    maintainer: zhangxueai
+    maintainer: AIluffy
     vendor: tildewire
-    homepage: https://github.com/zhangxueai/tildewire
+    homepage: https://github.com/AIluffy/tildewire
     description: Terminal daily technical signal radar for developers.
 
 checksum:

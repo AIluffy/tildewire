@@ -11,9 +11,9 @@ import (
 	// Load IANA zone data so static builds can calculate Product Hunt launch days.
 	_ "time/tzdata"
 
-	"github.com/zhangxueai/tildewire/internal/domain"
-	"github.com/zhangxueai/tildewire/internal/httpx"
-	"github.com/zhangxueai/tildewire/internal/normalize"
+	"github.com/AIluffy/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/httpx"
+	"github.com/AIluffy/tildewire/internal/normalize"
 )
 
 const (

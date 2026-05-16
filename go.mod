@@ -1,4 +1,4 @@
-module github.com/zhangxueai/tildewire
+module github.com/AIluffy/tildewire
 
 go 1.26.3
 

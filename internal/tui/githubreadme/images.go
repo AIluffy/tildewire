@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/zhangxueai/tildewire/internal/tui/markdown"
+	"github.com/AIluffy/tildewire/internal/tui/markdown"
 )
 
 var (

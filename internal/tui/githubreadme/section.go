@@ -3,7 +3,7 @@ package githubreadme
 import (
 	"strings"
 
-	"github.com/zhangxueai/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/domain"
 )
 
 // Section returns the GitHub README detail section, when present.

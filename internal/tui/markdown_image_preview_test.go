@@ -13,8 +13,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/zhangxueai/tildewire/internal/config"
-	tuiimage "github.com/zhangxueai/tildewire/internal/tui/image"
+	"github.com/AIluffy/tildewire/internal/config"
+	tuiimage "github.com/AIluffy/tildewire/internal/tui/image"
 )
 
 func TestTerminalMarkdownImagePreviewFallsBackToHalfblocksWhenGraphicsUnavailable(t *testing.T) {

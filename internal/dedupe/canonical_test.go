@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zhangxueai/tildewire/internal/domain"
-	"github.com/zhangxueai/tildewire/internal/normalize"
+	"github.com/AIluffy/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/normalize"
 )
 
 func TestCanonicalizeItemPromotesGitHubURLToRepoKey(t *testing.T) {

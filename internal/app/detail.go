@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/zhangxueai/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/domain"
 )
 
 // LoadDetail loads source-native detail content for a feed entry.

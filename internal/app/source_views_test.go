@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zhangxueai/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/domain"
 )
 
 func TestGitHubScopeForSourceViewParsesThreeDimensions(t *testing.T) {

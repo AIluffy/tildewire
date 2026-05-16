@@ -12,14 +12,14 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/zhangxueai/tildewire/internal/app"
-	"github.com/zhangxueai/tildewire/internal/boot"
-	"github.com/zhangxueai/tildewire/internal/config"
-	"github.com/zhangxueai/tildewire/internal/domain"
-	"github.com/zhangxueai/tildewire/internal/httpx"
-	"github.com/zhangxueai/tildewire/internal/sources"
-	"github.com/zhangxueai/tildewire/internal/store"
-	"github.com/zhangxueai/tildewire/internal/tui"
+	"github.com/AIluffy/tildewire/internal/app"
+	"github.com/AIluffy/tildewire/internal/boot"
+	"github.com/AIluffy/tildewire/internal/config"
+	"github.com/AIluffy/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/httpx"
+	"github.com/AIluffy/tildewire/internal/sources"
+	"github.com/AIluffy/tildewire/internal/store"
+	"github.com/AIluffy/tildewire/internal/tui"
 )
 
 // DisplayName returns the help/usage command name for the current invocation.

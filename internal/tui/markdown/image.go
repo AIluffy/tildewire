@@ -10,7 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/zhangxueai/tildewire/internal/config"
+	"github.com/AIluffy/tildewire/internal/config"
 )
 
 const (

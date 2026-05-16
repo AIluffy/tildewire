@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-repo="${TILDEWIRE_REPO:-zhangxueai/tildewire}"
+repo="${TILDEWIRE_REPO:-AIluffy/tildewire}"
 version="${TILDEWIRE_VERSION:-latest}"
 bin_dir="${TILDEWIRE_BIN_DIR:-$HOME/.local/bin}"
 github_url="${GITHUB_URL:-https://github.com}"

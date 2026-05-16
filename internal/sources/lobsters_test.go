@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zhangxueai/tildewire/internal/domain"
-	"github.com/zhangxueai/tildewire/internal/httpx"
+	"github.com/AIluffy/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/httpx"
 )
 
 func TestLobstersNormalizeFixture(t *testing.T) {

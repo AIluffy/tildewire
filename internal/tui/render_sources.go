@@ -7,8 +7,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/zhangxueai/tildewire/internal/app"
-	"github.com/zhangxueai/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/app"
+	"github.com/AIluffy/tildewire/internal/domain"
 )
 
 type sourceRow struct {

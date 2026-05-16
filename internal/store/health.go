@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/zhangxueai/tildewire/internal/domain"
-	"github.com/zhangxueai/tildewire/internal/store/generated"
+	"github.com/AIluffy/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/store/generated"
 )
 
 // UpdateSourceStatus persists current source health.

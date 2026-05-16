@@ -22,13 +22,13 @@ There are no `fetch`, `list`, `export`, `cache`, or `config` subcommands. Scanni
 For macOS and Linux, install the latest GitHub Release binary:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/zhangxueai/tildewire/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/AIluffy/tildewire/main/scripts/install.sh | sh
 ```
 
 Install a specific release:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/zhangxueai/tildewire/main/scripts/install.sh | TILDEWIRE_VERSION=v0.1.0 sh
+curl -fsSL https://raw.githubusercontent.com/AIluffy/tildewire/main/scripts/install.sh | TILDEWIRE_VERSION=v0.1.0 sh
 ```
 
 The installer downloads the matching release archive, verifies it against `checksums.txt`, installs `tildewire` to `${TILDEWIRE_BIN_DIR:-$HOME/.local/bin}`, and creates `tw` as a symlink only when no existing `tw` command or target path is found.
@@ -38,7 +38,7 @@ The installer downloads the matching release archive, verifies it against `check
 Install the canonical binary with Go:
 
 ```bash
-go install github.com/zhangxueai/tildewire@latest
+go install github.com/AIluffy/tildewire@latest
 ```
 
 This installs `tildewire` only. If you want the short `tw` entrypoint, use the release installer or create a private shell alias.
@@ -51,12 +51,12 @@ GitHub Releases provide:
 - Linux `.deb`, `.rpm`, and `.apk` packages.
 - `checksums.txt` for release verification.
 
-Download binaries and packages from the [releases](https://github.com/zhangxueai/tildewire/releases) page.
+Download binaries and packages from the [releases](https://github.com/AIluffy/tildewire/releases) page.
 
 ### Build From Source
 
 ```bash
-git clone https://github.com/zhangxueai/tildewire.git
+git clone https://github.com/AIluffy/tildewire.git
 cd tildewire
 go build -o tildewire .
 go build -o tw ./cmd/tw

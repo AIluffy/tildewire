@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 
-	"github.com/zhangxueai/tildewire/internal/store/generated"
+	"github.com/AIluffy/tildewire/internal/store/generated"
 )
 
 // SetSaved persists saved state.

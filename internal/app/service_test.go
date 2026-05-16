@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zhangxueai/tildewire/internal/dedupe"
-	"github.com/zhangxueai/tildewire/internal/domain"
-	"github.com/zhangxueai/tildewire/internal/httpx"
-	"github.com/zhangxueai/tildewire/internal/normalize"
-	"github.com/zhangxueai/tildewire/internal/sources"
-	"github.com/zhangxueai/tildewire/internal/store"
+	"github.com/AIluffy/tildewire/internal/dedupe"
+	"github.com/AIluffy/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/httpx"
+	"github.com/AIluffy/tildewire/internal/normalize"
+	"github.com/AIluffy/tildewire/internal/sources"
+	"github.com/AIluffy/tildewire/internal/store"
 )
 
 func TestRefreshPassesForceAndMarksStale(t *testing.T) {

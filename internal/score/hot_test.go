@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zhangxueai/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/domain"
 )
 
 func TestHotRewardsRankAndPenalizesRead(t *testing.T) {

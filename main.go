@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/zhangxueai/tildewire/internal/launcher"
+	"github.com/AIluffy/tildewire/internal/launcher"
 )
 
 var version = "dev"

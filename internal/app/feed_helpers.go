@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zhangxueai/tildewire/internal/domain"
-	"github.com/zhangxueai/tildewire/internal/score"
+	"github.com/AIluffy/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/score"
 )
 
 func (s *Service) preferenceProfileForView(ctx context.Context, view domain.SourceID) (domain.PreferenceProfile, error) {

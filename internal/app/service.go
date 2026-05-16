@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zhangxueai/tildewire/internal/domain"
-	"github.com/zhangxueai/tildewire/internal/httpx"
+	"github.com/AIluffy/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/httpx"
 )
 
 // Service coordinates stores, sources, sorting, and user state.

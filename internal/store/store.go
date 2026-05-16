@@ -7,9 +7,9 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/zhangxueai/tildewire/internal/domain"
-	"github.com/zhangxueai/tildewire/internal/httpx"
-	"github.com/zhangxueai/tildewire/internal/store/generated"
+	"github.com/AIluffy/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/httpx"
+	"github.com/AIluffy/tildewire/internal/store/generated"
 
 	"github.com/pressly/goose/v3"
 )

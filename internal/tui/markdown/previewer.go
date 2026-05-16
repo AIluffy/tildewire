@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zhangxueai/tildewire/internal/config"
-	tuiimage "github.com/zhangxueai/tildewire/internal/tui/image"
+	"github.com/AIluffy/tildewire/internal/config"
+	tuiimage "github.com/AIluffy/tildewire/internal/tui/image"
 )
 
 // MaxImageBytes caps downloaded Markdown image data.

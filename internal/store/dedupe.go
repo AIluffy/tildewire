@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zhangxueai/tildewire/internal/dedupe"
-	"github.com/zhangxueai/tildewire/internal/domain"
-	"github.com/zhangxueai/tildewire/internal/store/generated"
+	"github.com/AIluffy/tildewire/internal/dedupe"
+	"github.com/AIluffy/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/store/generated"
 )
 
 // ListDedupeCandidates returns non-ignored fuzzy duplicate suggestions.
