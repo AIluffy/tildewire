@@ -22,10 +22,10 @@ There are no `fetch`, `list`, `export`, `cache`, or `config` subcommands. Scanni
 Install the canonical binary on macOS or Linux with the tildewire tap:
 
 ```bash
-brew install AIluffy/tap/tildewire
+brew install --cask AIluffy/tap/tildewire
 ```
 
-The Homebrew formula installs `tildewire` only. Use the install script if you want conflict-safe `tw` setup.
+The Homebrew cask installs `tildewire` only. Use the install script if you want conflict-safe `tw` setup.
 
 ### Install Script
 
