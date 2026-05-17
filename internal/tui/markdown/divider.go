@@ -10,11 +10,11 @@ type markdownDividerBlock struct{}
 
 const markdownDividerMargin = 2
 
-func renderMarkdownDivider(width int) string {
+func renderMarkdownDivider(width int, theme Theme) string {
 	width = max(1, width)
 	margin := min(markdownDividerMargin, max(0, (width-8)/2))
 	dividerWidth := max(8, width-margin*2)
-	return lipgloss.NewStyle().Foreground(lipgloss.Color("#71717A")).Render(strings.Repeat(" ", margin) + strings.Repeat("─", dividerWidth))
+	return lipgloss.NewStyle().Foreground(theme.accentColor()).Render(strings.Repeat(" ", margin) + strings.Repeat("─", dividerWidth))
 }
 
 func canSplitMarkdownDivider(markdownLines []string) bool {

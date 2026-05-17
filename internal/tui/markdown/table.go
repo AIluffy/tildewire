@@ -22,11 +22,12 @@ type markdownTableBlock struct {
 	rows       [][]string
 }
 
-func renderMarkdownTable(block markdownTableBlock, width int, wrap bool) string {
-	gray := lipgloss.Color("#A1A1AA")
-	lightGray := lipgloss.Color("#D4D4D8")
-	borderStyle := lipgloss.NewStyle().Foreground(markdownTableBorderColor)
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(markdownTableBorderColor).Padding(0, 1)
+func renderMarkdownTable(block markdownTableBlock, width int, wrap bool, theme Theme) string {
+	gray := theme.mutedColor()
+	lightGray := theme.textColor()
+	accent := theme.accentColor()
+	borderStyle := lipgloss.NewStyle().Foreground(accent)
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(accent).Padding(0, 1)
 	evenRowStyle := lipgloss.NewStyle().Foreground(lightGray).Padding(0, 1)
 	oddRowStyle := lipgloss.NewStyle().Foreground(gray).Padding(0, 1)
 

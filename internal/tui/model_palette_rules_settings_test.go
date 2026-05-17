@@ -222,6 +222,7 @@ func TestModelSettingsFormSavesRuntimeConfig(t *testing.T) {
 	service := &fakeService{snapshot: snapshot}
 	model := NewModel(service, snapshot, ModelOptions{
 		Config: config.Config{
+			Theme:                "catppuccin",
 			GlamourStyle:         "dark",
 			MarkdownImagePreview: "auto",
 			HTTPCacheTTLHours:    6,
@@ -244,6 +245,7 @@ func TestModelSettingsFormSavesRuntimeConfig(t *testing.T) {
 		t.Fatalf("render missing settings form:\n%s", model.render())
 	}
 	model.view = domain.SourceGitHub
+	model.settingsDraft.Theme = "dracula"
 	model.settingsDraft.MarkdownImagePreview = "halfblocks"
 	model.settingsDraft.EnabledSources = []string{"hackernews"}
 	model.settingsDraft.GitHubToken = "new-gh"
@@ -257,7 +259,7 @@ func TestModelSettingsFormSavesRuntimeConfig(t *testing.T) {
 	if !saved {
 		t.Fatal("settings save callback was not called")
 	}
-	if savedConfig.GlamourStyle != "dark" || savedConfig.MarkdownImagePreview != "halfblocks" || savedConfig.HTTPCacheTTLHours != 6 || savedConfig.AccessibleForms {
+	if savedConfig.Theme != "dracula" || savedConfig.GlamourStyle != "dracula" || savedConfig.MarkdownImagePreview != "halfblocks" || savedConfig.HTTPCacheTTLHours != 6 || savedConfig.AccessibleForms {
 		t.Fatalf("unexpected saved config: %+v", savedConfig)
 	}
 	if !slices.Equal(savedConfig.EnabledSources, []string{"hackernews"}) || savedConfig.GitHubToken != "new-gh" || savedConfig.ProductHuntToken != "new-ph" {
@@ -281,6 +283,7 @@ func TestModelSettingsRenderGroupsAllSettings(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
 		Config: config.Config{
+			Theme:                "catppuccin",
 			GlamourStyle:         "dark",
 			MarkdownImagePreview: "auto",
 			HTTPCacheTTLHours:    6,
@@ -300,7 +303,7 @@ func TestModelSettingsRenderGroupsAllSettings(t *testing.T) {
 	plain := ansi.Strip(model.render())
 	for _, want := range []string{
 		"Display",
-		"Markdown style",
+		"Theme",
 		"Markdown image preview",
 		"Sources",
 		"Visible sources",
@@ -316,12 +319,16 @@ func TestModelSettingsRenderGroupsAllSettings(t *testing.T) {
 			t.Fatalf("settings layout missing %q:\n%s", want, plain)
 		}
 	}
+	if strings.Contains(plain, "Markdown style") {
+		t.Fatalf("settings layout should expose global Theme instead of Markdown style:\n%s", plain)
+	}
 }
 
 func TestModelSettingsRenderFillsScreenWithModuleDividersAndBottomHelp(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
 		Config: config.Config{
+			Theme:                "catppuccin",
 			GlamourStyle:         "dark",
 			MarkdownImagePreview: "auto",
 			HTTPCacheTTLHours:    6,
@@ -357,7 +364,7 @@ func TestModelSettingsRenderFillsScreenWithModuleDividersAndBottomHelp(t *testin
 	if len(dividers) != 3 {
 		t.Fatalf("settings module dividers = %d, want 3:\n%s", len(dividers), plain)
 	}
-	for _, label := range []string{"Markdown style", "GitHub token", "HTTP cache TTL"} {
+	for _, label := range []string{"Theme", "GitHub token", "HTTP cache TTL"} {
 		if settingsLineFollowedByDivider(lines, label) {
 			t.Fatalf("setting row %q should not have an item-level divider:\n%s", label, plain)
 		}
@@ -390,6 +397,73 @@ func TestModelSettingsRenderFillsScreenWithModuleDividersAndBottomHelp(t *testin
 	}
 	if actionLine < 2 || settingsLineContent(lines[actionLine-1]) != "" || settingsLineContent(lines[actionLine-2]) != "" {
 		t.Fatalf("settings actions should keep vertical spacing above them:\n%s", plain)
+	}
+}
+
+func TestModelPaletteThemeCommandPersistsTheme(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	saved := false
+	var savedConfig config.Config
+	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
+		Config: config.Config{
+			Theme:                "catppuccin",
+			GlamourStyle:         "dark",
+			MarkdownImagePreview: "auto",
+			HTTPCacheTTLHours:    6,
+			EnabledSources:       []string{"github", "hackernews", "huggingface", "lobsters", "producthunt"},
+		},
+		SaveConfig: func(cfg config.Config) error {
+			saved = true
+			savedConfig = cfg
+			return nil
+		},
+	})
+
+	model, _ = updateModelWithKey(t, model, "p")
+	for _, key := range []string{"t", "h", "e", "m", "e", ":", " ", "d", "r", "a", "c", "u", "l", "a"} {
+		model, _ = updateModelWithKey(t, model, key)
+	}
+	if plain := ansi.Strip(model.render()); !strings.Contains(plain, "Theme: Dracula") {
+		t.Fatalf("palette missing dracula theme command:\n%s", plain)
+	}
+
+	model, cmd := updateModelWithKey(t, model, "enter")
+	if cmd == nil {
+		t.Fatal("expected save config command")
+	}
+	model = runOptionalCmd(t, model, cmd)
+
+	if model.config.Theme != "dracula" {
+		t.Fatalf("model theme = %q, want dracula", model.config.Theme)
+	}
+	if !saved || savedConfig.Theme != "dracula" {
+		t.Fatalf("saved theme = %q saved=%v", savedConfig.Theme, saved)
+	}
+}
+
+func TestModelThemeChangesRenderedColors(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
+		Config: config.Config{
+			Theme:                "catppuccin",
+			GlamourStyle:         "dark",
+			MarkdownImagePreview: "auto",
+			HTTPCacheTTLHours:    6,
+			EnabledSources:       []string{"github", "hackernews", "huggingface", "lobsters", "producthunt"},
+		},
+	})
+	model.width = 100
+	model.height = 30
+	catppuccin := ansiSequenceBefore(model.render(), "View:")
+
+	model.applyTheme("dracula")
+	dracula := ansiSequenceBefore(model.render(), "View:")
+
+	if catppuccin == "" || dracula == "" {
+		t.Fatalf("rendered title should be styled: catppuccin=%q dracula=%q", catppuccin, dracula)
+	}
+	if catppuccin == dracula {
+		t.Fatalf("theme switch should change rendered ANSI color, got %q", catppuccin)
 	}
 }
 

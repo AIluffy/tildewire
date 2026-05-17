@@ -197,7 +197,7 @@ Statuses include `UNKNOWN`, `OK`, `STALE`, `REFRESHING`, `RATE_LIMITED`, `AUTH_R
 
 Press `c` to open Settings. The settings form can edit:
 
-- Markdown rendering style: dark, light, notty, or ascii.
+- Theme: catppuccin, dracula, gruvbox, nord, tokyo-night, solarized-dark, one-dark, everforest, rose-pine, or monokai.
 - Markdown image preview backend: auto, off, kitty, iterm, sixel, or halfblocks.
 - Raw HTTP cache TTL in hours.
 - Accessible form mode.
@@ -206,6 +206,8 @@ Press `c` to open Settings. The settings form can edit:
 - Product Hunt token.
 
 Settings are saved back to `config.toml`. Source visibility and token changes are applied to the running service without requiring a process restart. Disabling a source removes it from source navigation, filters, palette source commands, source health, recent fetch history, source counts, and refresh execution while preserving local cached data.
+
+Theme commands are also available from the command palette as `Theme: ...` entries. Themes affect the TUI chrome, source badges, status colors, command/settings overlays, and Markdown detail accents while preserving the terminal background.
 
 ## Personalization and Dedupe
 
@@ -371,6 +373,7 @@ Supported environment variables:
 TILDEWIRE_CONFIG
 TILDEWIRE_HTTP_TIMEOUT
 TILDEWIRE_HTTP_CACHE_TTL_HOURS
+TILDEWIRE_THEME
 TILDEWIRE_GLAMOUR_STYLE
 TILDEWIRE_MARKDOWN_IMAGE_PREVIEW
 TILDEWIRE_ACCESSIBLE_FORMS
@@ -384,6 +387,7 @@ User-editable TOML keys:
 ```toml
 http_timeout_seconds = 12
 http_cache_ttl_hours = 6
+theme = "catppuccin"
 glamour_style = "dark"
 markdown_image_preview = "auto"
 accessible_forms = false
@@ -399,6 +403,8 @@ source_order = ["github", "hackernews", "huggingface", "lobsters", "producthunt"
 github_token = ""
 product_hunt_token = ""
 ```
+
+`theme` controls the global TUI palette and drives Markdown detail styling. `glamour_style` is still read for compatibility with older config files, but Settings writes the theme-derived Markdown style.
 
 `markdown_image_preview = "auto"` renders non-badge GitHub README images as halfblocks inside the scrollable detail view so images move with the text layout. Set `markdown_image_preview = "kitty"`, `"iterm"`, or `"sixel"` to explicitly request terminal graphics, `"halfblocks"` to force text-cell image rendering, or `"off"` to keep text placeholders only. The legacy value `"chafa"` is normalized to `"halfblocks"` when read from older config files.
 

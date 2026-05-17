@@ -153,10 +153,10 @@ func (r sourceRow) render(m Model, width int) string {
 	if r.source == "" {
 		return ""
 	}
-	return sourceLine(m.view == r.source, r.label, m.sourceCount(r.source), width)
+	return m.sourceLine(m.view == r.source, r.label, m.sourceCount(r.source), width)
 }
 
-func sourceLine(active bool, label string, count, width int) string {
+func (m Model) sourceLine(active bool, label string, count, width int) string {
 	countText := fmt.Sprintf("%d", count)
 	if width <= 0 {
 		return ""
@@ -164,7 +164,7 @@ func sourceLine(active bool, label string, count, width int) string {
 	if width <= ansi.StringWidth(countText) {
 		line := clip(countText, width)
 		if active {
-			return activeStyle.Render(line)
+			return m.styles.active.Render(line)
 		}
 		return line
 	}
@@ -172,7 +172,7 @@ func sourceLine(active bool, label string, count, width int) string {
 	gap := strings.Repeat(" ", max(1, width-ansi.StringWidth(label)-ansi.StringWidth(countText)))
 	line := label + gap + countText
 	if active {
-		return activeStyle.Render(line)
+		return m.styles.active.Render(line)
 	}
 	return line
 }
@@ -226,7 +226,7 @@ func feedIndexWidth(total int) int {
 	return len(fmt.Sprintf("%d", max(1, total)))
 }
 
-func renderFeedItemLine(idx int, entry domain.FeedEntry, active bool, width int, search string, indexWidth int) string {
+func (m Model) renderFeedItemLine(idx int, entry domain.FeedEntry, active bool, width int, search string, indexWidth int) string {
 	prefix := "  "
 	if active {
 		prefix = "> "
@@ -237,33 +237,23 @@ func renderFeedItemLine(idx int, entry domain.FeedEntry, active bool, width int,
 		tail += " " + flags
 	}
 	tokens := searchQueryTokens(search)
-	renderedTail := renderSearchHighlightedTextWithStyle(tail, tokens, lipgloss.NewStyle())
-	line := lead + renderSourceBadge(entry.PrimarySource().Source) + " " + renderedTail
+	renderedTail := m.renderSearchHighlightedTextWithStyle(tail, tokens, lipgloss.NewStyle())
+	line := lead + m.renderSourceBadge(entry.PrimarySource().Source) + " " + renderedTail
 	if active {
-		line = activeStyle.Render(lead) + renderSourceBadge(entry.PrimarySource().Source) + renderSearchHighlightedTextWithStyle(" "+tail, tokens, activeStyle)
+		line = m.styles.active.Render(lead) + m.renderSourceBadge(entry.PrimarySource().Source) + m.renderSearchHighlightedTextWithStyle(" "+tail, tokens, m.styles.active)
 	}
 	return clip(line, width)
 }
 
-func renderSourceBadge(source domain.SourceID) string {
-	return sourceBadgeStyle(source).Render("[" + sourceBadge(source) + "]")
+func (m Model) renderSourceBadge(source domain.SourceID) string {
+	return m.sourceBadgeStyle(source).Render("[" + sourceBadge(source) + "]")
 }
 
-func sourceBadgeStyle(source domain.SourceID) lipgloss.Style {
-	switch source {
-	case domain.SourceGitHub:
-		return ghStyle
-	case domain.SourceHackerNews:
-		return hnStyle
-	case domain.SourceHuggingFace:
-		return hfStyle
-	case domain.SourceLobsters:
-		return lobStyle
-	case domain.SourceProductHunt:
-		return phStyle
-	default:
-		return mutedStyle
+func (m Model) sourceBadgeStyle(source domain.SourceID) lipgloss.Style {
+	if style, ok := m.styles.sources[source]; ok {
+		return style
 	}
+	return m.styles.muted
 }
 
 func (m Model) renderStatus() string {
@@ -272,20 +262,20 @@ func (m Model) renderStatus() string {
 		label := fmt.Sprintf("%s:%s", shortSource(status.Source), status.Status)
 		switch status.Status {
 		case domain.SourceStatusOK:
-			parts = append(parts, okStyle.Render(label))
+			parts = append(parts, m.styles.ok.Render(label))
 		case domain.SourceStatusRefreshing, domain.SourceStatusStale, domain.SourceStatusRateLimited:
-			parts = append(parts, warnStyle.Render(label))
+			parts = append(parts, m.styles.warn.Render(label))
 		case domain.SourceStatusNetworkError, domain.SourceStatusParserBroken, domain.SourceStatusAuthRequired:
-			parts = append(parts, errStyle.Render(label))
+			parts = append(parts, m.styles.err.Render(label))
 		default:
-			parts = append(parts, mutedStyle.Render(label))
+			parts = append(parts, m.styles.muted.Render(label))
 		}
 	}
 	if m.message != "" {
 		parts = append(parts, m.message)
 	}
 	if m.lastError != "" {
-		parts = append(parts, errStyle.Render(clip(m.lastError, max(20, m.width/2))))
+		parts = append(parts, m.styles.err.Render(clip(m.lastError, max(20, m.width/2))))
 	}
 	return clip(strings.Join(parts, " | "), m.width)
 }

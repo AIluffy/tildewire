@@ -35,16 +35,16 @@ func renderMarkdownSegments(renderer markdownRenderer, segments []markdownSegmen
 			continue
 		}
 		if segment.table != nil {
-			appendBlock(renderMarkdownTable(*segment.table, width, options.TableWrap))
+			appendBlock(renderMarkdownTable(*segment.table, width, options.TableWrap, options.Theme))
 			continue
 		}
 		if segment.image != nil {
 			state, ok := imageStateForSegment(*segment.image, width, options)
-			appendBlock(RenderImageSegment(*segment.image, width, options.ImageMode, state, ok))
+			appendBlock(RenderImageSegment(*segment.image, width, options.ImageMode, state, ok, options.Theme))
 			continue
 		}
 		if segment.divider != nil {
-			appendBlock(renderMarkdownDivider(width))
+			appendBlock(renderMarkdownDivider(width, options.Theme))
 			continue
 		}
 		if strings.TrimSpace(segment.markdown) == "" {

@@ -42,22 +42,22 @@ func (m Model) previewContentLines(width int) []string {
 	lines := []string{}
 	entry, ok := m.selected()
 	if !ok {
-		lines = append(lines, "", mutedStyle.Render("Select an item."))
+		lines = append(lines, "", m.styles.muted.Render("Select an item."))
 		return lines
 	}
-	lines = append(lines, "", activeStyle.Render(clip(entry.Item.Title, width)))
+	lines = append(lines, "", m.styles.active.Render(clip(entry.Item.Title, width)))
 	if metrics := previewMetricLine(entry); metrics != "" {
-		lines = append(lines, mutedStyle.Render(clip(metrics, width)))
+		lines = append(lines, m.styles.muted.Render(clip(metrics, width)))
 	}
 	if entry.Item.Summary != "" {
 		lines = append(lines, "")
 		lines = append(lines, wrap(entry.Item.Summary, width)...)
 	}
-	if cues := previewContentCueLines(entry, width); len(cues) > 0 {
+	if cues := m.previewContentCueLines(entry, width); len(cues) > 0 {
 		lines = append(lines, "")
 		lines = append(lines, cues...)
 	}
-	if links := previewLinkLines(entry, width); len(links) > 0 {
+	if links := m.previewLinkLines(entry, width); len(links) > 0 {
 		lines = append(lines, "")
 		lines = append(lines, links...)
 	}
@@ -190,7 +190,7 @@ func productHuntPreviewMetricParts(metrics domain.Metrics) []string {
 	return parts
 }
 
-func previewContentCueLines(entry domain.FeedEntry, width int) []string {
+func (m Model) previewContentCueLines(entry domain.FeedEntry, width int) []string {
 	item := entry.Item
 	var parts []string
 	if item.Language != "" {
@@ -214,16 +214,16 @@ func previewContentCueLines(entry domain.FeedEntry, width int) []string {
 	if len(parts) == 0 {
 		return nil
 	}
-	return []string{mutedStyle.Render(clip(strings.Join(parts, " | "), width))}
+	return []string{m.styles.muted.Render(clip(strings.Join(parts, " | "), width))}
 }
 
-func previewLinkLines(entry domain.FeedEntry, width int) []string {
+func (m Model) previewLinkLines(entry domain.FeedEntry, width int) []string {
 	var lines []string
 	if entry.Item.URL != "" {
 		lines = append(lines, clip(entry.Item.URL, width))
 	}
 	if entry.Item.CommentsURL != "" && entry.Item.CommentsURL != entry.Item.URL {
-		lines = append(lines, mutedStyle.Render(clip(entry.Item.CommentsURL, width)))
+		lines = append(lines, m.styles.muted.Render(clip(entry.Item.CommentsURL, width)))
 	}
 	return lines
 }

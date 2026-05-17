@@ -14,24 +14,24 @@ import (
 func (m Model) loadingLines(width int) []string {
 	statuses := m.visibleStatuses()
 	if m.view != domain.SourceAll {
-		return singleSourceLoadingLines(width, m.view, statuses, m.loadingSpinner.View())
+		return m.singleSourceLoadingLines(width, m.view, statuses, m.loadingSpinner.View())
 	}
-	lines := []string{mutedStyle.Render("Loading sources...")}
-	if bar := loadingProgressBar(width, statuses); bar != "" {
+	lines := []string{m.styles.muted.Render("Loading sources...")}
+	if bar := m.loadingProgressBar(width, statuses); bar != "" {
 		lines = append(lines, bar)
 	}
-	return append(lines, loadingSourceLines(statuses)...)
+	return append(lines, m.loadingSourceLines(statuses)...)
 }
 
-func singleSourceLoadingLines(width int, source domain.SourceID, statuses []domain.SourceHealth, frame string) []string {
+func (m Model) singleSourceLoadingLines(width int, source domain.SourceID, statuses []domain.SourceHealth, frame string) []string {
 	status := loadingStatusForSource(statuses, source)
 	label := app.SourceLabel(source)
 	if strings.TrimSpace(frame) == "" {
 		frame = "..."
 	}
 	return []string{
-		mutedStyle.Render("Loading " + label + "..."),
-		clip(fmt.Sprintf("%s %s %s", frame, renderSourceBadge(source), mutedStyle.Render(string(status))), width),
+		m.styles.muted.Render("Loading " + label + "..."),
+		clip(fmt.Sprintf("%s %s %s", frame, m.renderSourceBadge(source), m.styles.muted.Render(string(status))), width),
 	}
 }
 
@@ -44,7 +44,7 @@ func loadingStatusForSource(statuses []domain.SourceHealth, source domain.Source
 	return domain.SourceStatusRefreshing
 }
 
-func loadingSourceLines(statuses []domain.SourceHealth) []string {
+func (m Model) loadingSourceLines(statuses []domain.SourceHealth) []string {
 	statusBySource := make(map[domain.SourceID]domain.SourceStatus, len(statuses))
 	for _, status := range statuses {
 		statusBySource[status.Source] = status.Status
@@ -56,17 +56,17 @@ func loadingSourceLines(statuses []domain.SourceHealth) []string {
 		if status == "" || status == domain.SourceStatusUnknown {
 			status = domain.SourceStatusRefreshing
 		}
-		lines = append(lines, fmt.Sprintf("   %s %s", renderSourceBadge(source), mutedStyle.Render(string(status))))
+		lines = append(lines, fmt.Sprintf("   %s %s", m.renderSourceBadge(source), m.styles.muted.Render(string(status))))
 	}
 	return lines
 }
 
-func loadingProgressBar(width int, statuses []domain.SourceHealth) string {
+func (m Model) loadingProgressBar(width int, statuses []domain.SourceHealth) string {
 	if width < 12 {
 		return ""
 	}
 	bar := progress.New(
-		progress.WithColors(lipgloss.Color("#2563EB"), lipgloss.Color("#16A34A")),
+		progress.WithColors(lipgloss.Color(m.styles.spec.active), lipgloss.Color(m.styles.spec.ok)),
 		progress.WithScaled(true),
 		progress.WithWidth(clamp(width, 12, 42)),
 	)

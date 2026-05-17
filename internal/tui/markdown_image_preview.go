@@ -105,7 +105,7 @@ func (m Model) renderMarkdownImageSegment(ref markdownImageRef, width int) strin
 	mode := scrollableMarkdownImagePreviewMode(m.config.MarkdownImagePreview)
 	key := markdownImagePreviewKey{URL: ref.URL, Mode: mode, Width: min(width, 96)}
 	state, ok := m.imagePreviews[key]
-	return md.RenderImageSegment(ref, width, m.config.MarkdownImagePreview, state, ok)
+	return md.RenderImageSegment(ref, width, m.config.MarkdownImagePreview, state, ok, m.styles.markdown)
 }
 
 func (m Model) drawDetailRawImagesCmd() tea.Cmd {

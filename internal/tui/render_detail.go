@@ -30,6 +30,7 @@ type detailLineCacheKey struct {
 	loading        bool
 	loadingLabel   string
 	detailError    string
+	theme          string
 	glamourStyle   string
 	imageMode      string
 	imageVersion   int
@@ -40,9 +41,9 @@ func (m Model) renderDetail() string {
 	width := m.detailContentWidth()
 	_, ok := m.selected()
 	if !ok {
-		body := fillLines([]string{mutedStyle.Render("No item selected.")}, m.detailVisibleHeight())
+		body := fillLines([]string{m.styles.muted.Render("No item selected.")}, m.detailVisibleHeight())
 		lines := strings.Split(body, "\n")
-		lines = append(lines, mutedStyle.Render("esc back"))
+		lines = append(lines, m.styles.muted.Render("esc back"))
 		return strings.Join(m.centerDetailLines(lines, width), "\n")
 	}
 	lines := m.detailContentLines(width)
@@ -60,7 +61,7 @@ func (m Model) renderDetail() string {
 	}
 	renderedLines := strings.Split(body, "\n")
 	renderedLines = m.renderDetailToast(renderedLines, width)
-	renderedLines = append(renderedLines, mutedStyle.Render(footer))
+	renderedLines = append(renderedLines, m.styles.muted.Render(footer))
 	return strings.Join(m.centerDetailLines(renderedLines, width), "\n")
 }
 
@@ -68,13 +69,13 @@ func (m Model) renderDetailToast(lines []string, width int) []string {
 	if m.toast == "" || len(lines) == 0 {
 		return lines
 	}
-	lines[len(lines)-1] = renderToastLine(m.toast, width)
+	lines[len(lines)-1] = m.renderToastLine(m.toast, width)
 	return lines
 }
 
-func renderToastLine(message string, width int) string {
+func (m Model) renderToastLine(message string, width int) string {
 	maxMessageWidth := max(1, width-6)
-	toast := toastStyle.Render(clip(message, maxMessageWidth))
+	toast := m.styles.toast.Render(clip(message, maxMessageWidth))
 	toastWidth := ansi.StringWidth(toast)
 	leftPad := strings.Repeat(" ", max(0, (width-toastWidth)/2))
 	return clip(leftPad+toast, width)
@@ -126,6 +127,7 @@ func (m *Model) detailContentLines(width int) []string {
 		loading:        m.detailLoading,
 		loadingLabel:   loadingLabel,
 		detailError:    m.detailError,
+		theme:          m.config.Theme,
 		glamourStyle:   strings.TrimSpace(m.config.GlamourStyle),
 		imageMode:      normalizeMarkdownImagePreviewMode(m.config.MarkdownImagePreview),
 		imageVersion:   m.detailImageVersion,
@@ -174,10 +176,10 @@ func (m Model) renderDetailDocument(entry domain.FeedEntry, width int, loadingLa
 		return document
 	}
 	lines := []string{
-		activeStyle.Render(wrapFirst(entry.Item.Title, width)),
+		m.styles.active.Render(wrapFirst(entry.Item.Title, width)),
 	}
 	if entry.Item.Subtitle != "" {
-		lines = append(lines, mutedStyle.Render(entry.Item.Subtitle))
+		lines = append(lines, m.styles.muted.Render(entry.Item.Subtitle))
 	}
 	lines = append(lines, "", "URL: "+entry.Item.URL)
 	if entry.Item.CommentsURL != "" {
@@ -253,6 +255,7 @@ func (m Model) renderMarkdownWithOptions(markdown string, width int, baseURL str
 func (m Model) renderMarkdownDocumentWithOptions(markdown string, width int, baseURL string, tableWrap bool, cleanHeadingPrefixes bool, imageSegments bool) (md.RenderedDocument, error) {
 	options := md.Options{
 		Style:                strings.TrimSpace(m.config.GlamourStyle),
+		Theme:                m.styles.markdown,
 		Width:                width,
 		BaseURL:              baseURL,
 		TableWrap:            tableWrap,

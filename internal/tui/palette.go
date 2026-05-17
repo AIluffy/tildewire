@@ -163,6 +163,7 @@ func (m Model) paletteCommands() []paletteCommand {
 	for _, entry := range m.sourceCatalog() {
 		commands = append(commands, paletteSourceCommand(entry.Label+" view", sourceKeywords(entry.Source), entry.Source))
 	}
+	commands = append(commands, themePaletteCommands()...)
 	commands = append(commands,
 		paletteCommand{label: "Filter", keywords: "filter", run: func(m Model) (Model, tea.Cmd) {
 			m.openFilter()

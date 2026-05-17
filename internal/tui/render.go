@@ -9,26 +9,6 @@ import (
 	"github.com/AIluffy/tildewire/internal/domain"
 )
 
-var (
-	headerStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7C3AED"))
-	titleStyle     = lipgloss.NewStyle().Bold(true)
-	mutedStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#71717A"))
-	searchHitStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FACC15")).Bold(true)
-	okStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("#16A34A"))
-	warnStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#D97706"))
-	errStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("#DC2626"))
-	toastStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#F8FAFC")).Background(lipgloss.Color("#2563EB")).Padding(0, 1)
-	panelStyle     = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("#A1A1AA")).Padding(0, 1)
-	focusStyle     = panelStyle.BorderForeground(lipgloss.Color("#2563EB"))
-	activeStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#2563EB")).Bold(true)
-	controlStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#E5E7EB")).Bold(true)
-	ghStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("#7C3AED")).Bold(true)
-	hnStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("#EA580C")).Bold(true)
-	hfStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("#0891B2")).Bold(true)
-	lobStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("#059669")).Bold(true)
-	phStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("#DB2777")).Bold(true)
-)
-
 type mainPanel int
 
 const (
@@ -96,9 +76,9 @@ func (m Model) render() string {
 	}
 	layout := m.mainLayout()
 	header := clip(m.renderHeader(), m.width)
-	sources := renderPanel(layout.sources, m.renderSources(layout.sources.contentWidth, layout.sources.contentHeight), m.activePanel == panelSources)
-	feed := renderPanel(layout.feed, m.renderFeed(layout.feed.contentWidth, layout.feed.contentHeight), m.activePanel == panelFeed)
-	preview := renderPanel(layout.preview, m.renderPreview(layout.preview.contentWidth, layout.preview.contentHeight), m.activePanel == panelPreview)
+	sources := m.renderPanel(layout.sources, m.renderSources(layout.sources.contentWidth, layout.sources.contentHeight), m.activePanel == panelSources)
+	feed := m.renderPanel(layout.feed, m.renderFeed(layout.feed.contentWidth, layout.feed.contentHeight), m.activePanel == panelFeed)
+	preview := m.renderPanel(layout.preview, m.renderPreview(layout.preview.contentWidth, layout.preview.contentHeight), m.activePanel == panelPreview)
 	body := lipgloss.JoinHorizontal(lipgloss.Top, sources, feed, preview)
 	status := m.renderStatus()
 	help := m.renderMainHelp()
@@ -108,7 +88,7 @@ func (m Model) render() string {
 func (m Model) mainLayout() mainLayout {
 	renderWidth := max(40, m.width)
 	renderHeight := max(12, m.height)
-	frameWidth, _ := panelStyle.GetFrameSize()
+	frameWidth, _ := m.styles.panel.GetFrameSize()
 	minPanelWidth := frameWidth + 6
 	minFeedWidth := frameWidth + 16
 	bodyHeight := max(1, renderHeight-2-renderedBlockHeight(m.renderMainHelp()))
@@ -140,9 +120,9 @@ func (m Model) mainLayout() mainLayout {
 	}
 
 	bodyY := 1
-	sources := newPanelBox(panelSources, 0, bodyY, sourcesWidth, bodyHeight)
-	feed := newPanelBox(panelFeed, sourcesWidth, bodyY, feedWidth, bodyHeight)
-	preview := newPanelBox(panelPreview, sourcesWidth+feedWidth, bodyY, previewWidth, bodyHeight)
+	sources := m.newPanelBox(panelSources, 0, bodyY, sourcesWidth, bodyHeight)
+	feed := m.newPanelBox(panelFeed, sourcesWidth, bodyY, feedWidth, bodyHeight)
+	preview := m.newPanelBox(panelPreview, sourcesWidth+feedWidth, bodyY, previewWidth, bodyHeight)
 	return mainLayout{sources: sources, feed: feed, preview: preview}
 }
 
@@ -153,10 +133,10 @@ func (m Model) renderMainHelp() string {
 	return clipBlock(helpModel.View(m.keys), width)
 }
 
-func newPanelBox(panel mainPanel, x, y, width, height int) panelBox {
-	left := panelStyle.GetBorderLeftSize() + panelStyle.GetPaddingLeft()
-	top := panelStyle.GetBorderTopSize() + panelStyle.GetPaddingTop()
-	frameWidth, frameHeight := panelStyle.GetFrameSize()
+func (m Model) newPanelBox(panel mainPanel, x, y, width, height int) panelBox {
+	left := m.styles.panel.GetBorderLeftSize() + m.styles.panel.GetPaddingLeft()
+	top := m.styles.panel.GetBorderTopSize() + m.styles.panel.GetPaddingTop()
+	frameWidth, frameHeight := m.styles.panel.GetFrameSize()
 	return panelBox{
 		panel:         panel,
 		x:             x,
@@ -170,10 +150,10 @@ func newPanelBox(panel mainPanel, x, y, width, height int) panelBox {
 	}
 }
 
-func renderPanel(box panelBox, content string, focused bool) string {
-	style := panelStyle
+func (m Model) renderPanel(box panelBox, content string, focused bool) string {
+	style := m.styles.panel
 	if focused {
-		style = focusStyle
+		style = m.styles.focus
 	}
 	return style.Width(box.width).Height(box.height).Render(content)
 }
@@ -210,23 +190,23 @@ func (m Model) renderHeader() string {
 	if refresh != "" {
 		parts = append(parts, strings.TrimSpace(refresh))
 	}
-	return strings.Join([]string{renderAppTitle(), headerStyle.Render(strings.Join(parts, "  "))}, "  ")
+	return strings.Join([]string{m.renderAppTitle(), m.styles.header.Render(strings.Join(parts, "  "))}, "  ")
 }
 
-func renderAppTitle() string {
+func (m Model) renderAppTitle() string {
 	const title = "Tildewire"
 	runes := []rune(title)
 	gradient := lipgloss.Blend1D(
 		len(runes),
-		lipgloss.Color("#14B8A6"),
-		lipgloss.Color("#3B82F6"),
-		lipgloss.Color("#A855F7"),
-		lipgloss.Color("#EC4899"),
+		lipgloss.Color(m.styles.spec.accentAlt),
+		lipgloss.Color(m.styles.spec.active),
+		lipgloss.Color(m.styles.spec.accent),
+		lipgloss.Color(m.styles.spec.productHunt),
 	)
 
 	var b strings.Builder
 	for i, r := range runes {
-		style := titleStyle
+		style := m.styles.title
 		if i < len(gradient) {
 			style = style.Foreground(gradient[i])
 		}
@@ -254,7 +234,7 @@ func (m Model) renderFeed(width, height int) string {
 			lines = append(lines, m.loadingLines(width)...)
 			return fillLines(lines, height)
 		}
-		lines = append(lines, mutedStyle.Render("No cached items yet."), mutedStyle.Render("Press r to refresh."))
+		lines = append(lines, m.styles.muted.Render("No cached items yet."), m.styles.muted.Render("Press r to refresh."))
 		return fillLines(lines, height)
 	}
 	visibleRows := feedVisibleRowsFor(height, m.feedTopRows())
@@ -263,7 +243,7 @@ func (m Model) renderFeed(width, height int) string {
 	indexWidth := feedIndexWidth(len(m.entries))
 	for idx := start; idx < end; idx++ {
 		entry := m.entries[idx]
-		lines = append(lines, renderFeedItemLine(idx, entry, idx == m.cursor, width, m.filter.Search, indexWidth))
+		lines = append(lines, m.renderFeedItemLine(idx, entry, idx == m.cursor, width, m.filter.Search, indexWidth))
 		lines = append(lines, m.renderFeedItemSubtitle(entry, width))
 		lines = append(lines, "")
 	}
@@ -273,17 +253,17 @@ func (m Model) renderFeed(width, height int) string {
 func (m Model) renderFeedItemSubtitle(entry domain.FeedEntry, width int) string {
 	context, ok := searchMatchContext(entry, m.filter.Search)
 	if ok {
-		line := mutedStyle.Render("   match: ") + renderSearchHighlightedText(context, searchQueryTokens(m.filter.Search))
+		line := m.styles.muted.Render("   match: ") + m.renderSearchHighlightedText(context, searchQueryTokens(m.filter.Search))
 		return clip(line, width)
 	}
-	return mutedStyle.Render(clip("   "+entry.Item.Subtitle, width))
+	return m.styles.muted.Render(clip("   "+entry.Item.Subtitle, width))
 }
 
-func renderSearchHighlightedText(value string, tokens []string) string {
-	return renderSearchHighlightedTextWithStyle(value, tokens, mutedStyle)
+func (m Model) renderSearchHighlightedText(value string, tokens []string) string {
+	return m.renderSearchHighlightedTextWithStyle(value, tokens, m.styles.muted)
 }
 
-func renderSearchHighlightedTextWithStyle(value string, tokens []string, baseStyle lipgloss.Style) string {
+func (m Model) renderSearchHighlightedTextWithStyle(value string, tokens []string, baseStyle lipgloss.Style) string {
 	if value == "" {
 		return ""
 	}
@@ -297,7 +277,7 @@ func renderSearchHighlightedTextWithStyle(value string, tokens []string, baseSty
 		if start > 0 {
 			builder.WriteString(baseStyle.Render(value[:start]))
 		}
-		builder.WriteString(searchHitStyle.Render(value[start : start+length]))
+		builder.WriteString(m.styles.searchHit.Render(value[start : start+length]))
 		value = value[start+length:]
 	}
 	return builder.String()

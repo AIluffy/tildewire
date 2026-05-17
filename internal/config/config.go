@@ -17,8 +17,19 @@ import (
 const (
 	defaultHTTPTimeout              = 12
 	defaultHTTPCacheTTLHours        = 6
+	defaultTheme                    = "catppuccin"
 	defaultGlamourStyle             = "dark"
 	defaultMarkdownImagePreview     = "auto"
+	ThemeCatppuccin                 = "catppuccin"
+	ThemeDracula                    = "dracula"
+	ThemeGruvbox                    = "gruvbox"
+	ThemeNord                       = "nord"
+	ThemeTokyoNight                 = "tokyo-night"
+	ThemeSolarizedDark              = "solarized-dark"
+	ThemeOneDark                    = "one-dark"
+	ThemeEverforest                 = "everforest"
+	ThemeRosePine                   = "rose-pine"
+	ThemeMonokai                    = "monokai"
 	MarkdownImagePreviewAuto        = "auto"
 	MarkdownImagePreviewOff         = "off"
 	MarkdownImagePreviewKitty       = "kitty"
@@ -39,6 +50,7 @@ type Config struct {
 	Version              string
 	HTTPTimeout          int
 	HTTPCacheTTLHours    int
+	Theme                string
 	GlamourStyle         string
 	MarkdownImagePreview string
 	AccessibleForms      bool
@@ -60,6 +72,7 @@ type Options struct {
 type fileConfig struct {
 	HTTPTimeout          int      `toml:"http_timeout_seconds"`
 	HTTPCacheTTLHours    int      `toml:"http_cache_ttl_hours"`
+	Theme                string   `toml:"theme"`
 	GlamourStyle         string   `toml:"glamour_style"`
 	MarkdownImagePreview string   `toml:"markdown_image_preview"`
 	AccessibleForms      bool     `toml:"accessible_forms"`
@@ -107,6 +120,7 @@ func Save(cfg Config) error {
 	data := fileConfig{
 		HTTPTimeout:          positiveOrDefault(cfg.HTTPTimeout, defaultHTTPTimeout),
 		HTTPCacheTTLHours:    positiveOrDefault(cfg.HTTPCacheTTLHours, defaultHTTPCacheTTLHours),
+		Theme:                normalizeThemeOrDefault(cfg.Theme),
 		GlamourStyle:         nonEmptyOrDefault(cfg.GlamourStyle, defaultGlamourStyle),
 		MarkdownImagePreview: normalizeMarkdownImagePreviewOrDefault(cfg.MarkdownImagePreview),
 		AccessibleForms:      cfg.AccessibleForms,
@@ -146,6 +160,7 @@ func defaultConfig(version string) (Config, error) {
 		Version:              version,
 		HTTPTimeout:          defaultHTTPTimeout,
 		HTTPCacheTTLHours:    defaultHTTPCacheTTLHours,
+		Theme:                defaultTheme,
 		GlamourStyle:         defaultGlamourStyle,
 		MarkdownImagePreview: defaultMarkdownImagePreview,
 		EnabledSources:       defaultEnabledSources(),
@@ -194,6 +209,9 @@ func applyFile(cfg *Config, file fileConfig) {
 	if file.HTTPCacheTTLHours > 0 {
 		cfg.HTTPCacheTTLHours = file.HTTPCacheTTLHours
 	}
+	if strings.TrimSpace(file.Theme) != "" {
+		cfg.Theme = normalizeThemeOrDefault(file.Theme)
+	}
 	if strings.TrimSpace(file.GlamourStyle) != "" {
 		cfg.GlamourStyle = strings.TrimSpace(file.GlamourStyle)
 	}
@@ -228,6 +246,13 @@ func applyEnv(cfg *Config) error {
 			return fmt.Errorf("TILDEWIRE_HTTP_CACHE_TTL_HOURS must be a positive integer")
 		}
 		cfg.HTTPCacheTTLHours = ttlHours
+	}
+	if value := strings.TrimSpace(os.Getenv("TILDEWIRE_THEME")); value != "" {
+		theme, ok := normalizeTheme(value)
+		if !ok {
+			return fmt.Errorf("TILDEWIRE_THEME must be one of %s", strings.Join(supportedThemes(), ", "))
+		}
+		cfg.Theme = theme
 	}
 	if value := strings.TrimSpace(os.Getenv("TILDEWIRE_GLAMOUR_STYLE")); value != "" {
 		cfg.GlamourStyle = value
@@ -279,6 +304,52 @@ func nonEmptyOrDefault(value, fallback string) string {
 		return fallback
 	}
 	return strings.TrimSpace(value)
+}
+
+func normalizeThemeOrDefault(value string) string {
+	if theme, ok := normalizeTheme(value); ok {
+		return theme
+	}
+	return defaultTheme
+}
+
+func normalizeTheme(value string) (string, bool) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	value = strings.ReplaceAll(value, "_", "-")
+	value = strings.ReplaceAll(value, " ", "-")
+	switch value {
+	case "tokyonight":
+		value = ThemeTokyoNight
+	case "solarized":
+		value = ThemeSolarizedDark
+	case "solarizeddark":
+		value = ThemeSolarizedDark
+	case "onedark":
+		value = ThemeOneDark
+	case "rosepine":
+		value = ThemeRosePine
+	}
+	for _, theme := range supportedThemes() {
+		if value == theme {
+			return theme, true
+		}
+	}
+	return "", false
+}
+
+func supportedThemes() []string {
+	return []string{
+		ThemeCatppuccin,
+		ThemeDracula,
+		ThemeGruvbox,
+		ThemeNord,
+		ThemeTokyoNight,
+		ThemeSolarizedDark,
+		ThemeOneDark,
+		ThemeEverforest,
+		ThemeRosePine,
+		ThemeMonokai,
+	}
 }
 
 func normalizeMarkdownImagePreviewOrDefault(value string) string {

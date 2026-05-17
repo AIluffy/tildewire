@@ -5,12 +5,22 @@ import (
 	"strings"
 
 	"charm.land/glamour/v2"
+	glamourANSI "charm.land/glamour/v2/ansi"
 	glamourStyles "charm.land/glamour/v2/styles"
 )
+
+// Theme carries terminal theme colors into Markdown rendering.
+type Theme struct {
+	Accent   string
+	Muted    string
+	Text     string
+	CodeText string
+}
 
 // Options controls terminal Markdown rendering.
 type Options struct {
 	Style                string
+	Theme                Theme
 	Width                int
 	BaseURL              string
 	TableWrap            bool
@@ -45,7 +55,7 @@ func RenderDocument(markdown string, options Options) (RenderedDocument, error) 
 	}
 	width := max(1, options.Width)
 	rendererOptions := []glamour.TermRendererOption{
-		glamourStyleOption(style, options.CleanHeadingPrefixes),
+		glamourStyleOption(style, options.CleanHeadingPrefixes, options.Theme),
 		glamour.WithWordWrap(width),
 		glamour.WithTableWrap(options.TableWrap),
 	}
@@ -71,8 +81,8 @@ type markdownRenderer interface {
 	Render(string) (string, error)
 }
 
-func glamourStyleOption(style string, cleanHeadingPrefixes bool) glamour.TermRendererOption {
-	if !cleanHeadingPrefixes {
+func glamourStyleOption(style string, cleanHeadingPrefixes bool, theme Theme) glamour.TermRendererOption {
+	if !cleanHeadingPrefixes && theme.empty() {
 		return glamour.WithStandardStyle(style)
 	}
 	styleConfig, ok := glamourStyles.DefaultStyles[style]
@@ -80,13 +90,48 @@ func glamourStyleOption(style string, cleanHeadingPrefixes bool) glamour.TermRen
 		return glamour.WithStandardStyle(style)
 	}
 	config := *styleConfig
-	config.H1.Prefix = cleanMarkdownHeadingPrefix(config.H1.Prefix)
-	config.H2.Prefix = cleanMarkdownHeadingPrefix(config.H2.Prefix)
-	config.H3.Prefix = cleanMarkdownHeadingPrefix(config.H3.Prefix)
-	config.H4.Prefix = cleanMarkdownHeadingPrefix(config.H4.Prefix)
-	config.H5.Prefix = cleanMarkdownHeadingPrefix(config.H5.Prefix)
-	config.H6.Prefix = cleanMarkdownHeadingPrefix(config.H6.Prefix)
+	if cleanHeadingPrefixes {
+		config.H1.Prefix = cleanMarkdownHeadingPrefix(config.H1.Prefix)
+		config.H2.Prefix = cleanMarkdownHeadingPrefix(config.H2.Prefix)
+		config.H3.Prefix = cleanMarkdownHeadingPrefix(config.H3.Prefix)
+		config.H4.Prefix = cleanMarkdownHeadingPrefix(config.H4.Prefix)
+		config.H5.Prefix = cleanMarkdownHeadingPrefix(config.H5.Prefix)
+		config.H6.Prefix = cleanMarkdownHeadingPrefix(config.H6.Prefix)
+	}
+	applyGlamourTheme(&config, theme)
 	return glamour.WithStyles(config)
+}
+
+func applyGlamourTheme(config *glamourANSI.StyleConfig, theme Theme) {
+	if theme.empty() {
+		return
+	}
+	if text := strings.TrimSpace(theme.Text); text != "" {
+		config.Document.Color = &text
+		config.List.Color = &text
+	}
+	if accent := strings.TrimSpace(theme.Accent); accent != "" {
+		config.Heading.Color = &accent
+		config.Link.Color = &accent
+		config.LinkText.Color = &accent
+		config.Image.Color = &accent
+		config.ImageText.Color = &accent
+		config.HorizontalRule.Color = &accent
+	}
+	if muted := strings.TrimSpace(theme.Muted); muted != "" {
+		config.BlockQuote.Color = &muted
+	}
+	if code := strings.TrimSpace(theme.CodeText); code != "" {
+		config.Code.Color = &code
+		config.CodeBlock.Color = &code
+	}
+}
+
+func (theme Theme) empty() bool {
+	return strings.TrimSpace(theme.Accent) == "" &&
+		strings.TrimSpace(theme.Muted) == "" &&
+		strings.TrimSpace(theme.Text) == "" &&
+		strings.TrimSpace(theme.CodeText) == ""
 }
 
 func cleanMarkdownHeadingPrefix(prefix string) string {

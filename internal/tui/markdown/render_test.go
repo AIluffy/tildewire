@@ -157,6 +157,45 @@ func TestCodeBlockPaletteUsesTableBorderColor(t *testing.T) {
 	}
 }
 
+func TestMarkdownThemeControlsTableDividerAndCodeAccent(t *testing.T) {
+	theme := Theme{
+		Accent:   "#FF0000",
+		Muted:    "#00FF00",
+		Text:     "#F8F8F2",
+		CodeText: "#E5E7EB",
+	}
+	tableMarkdown := strings.Join([]string{
+		"| What | How |",
+		"| --- | --- |",
+		"| Theme | Accent |",
+	}, "\n")
+
+	renderedTable, err := Render(tableMarkdown, Options{Style: "dark", Width: 64, Theme: theme})
+	if err != nil {
+		t.Fatalf("render table: %v", err)
+	}
+	if !strings.Contains(renderedTable, "255;0;0") {
+		t.Fatalf("table should use theme accent color:\n%q", renderedTable)
+	}
+
+	renderedDivider, err := Render("---", Options{Style: "dark", Width: 40, Theme: theme})
+	if err != nil {
+		t.Fatalf("render divider: %v", err)
+	}
+	if !strings.Contains(renderedDivider, "255;0;0") {
+		t.Fatalf("divider should use theme accent color:\n%q", renderedDivider)
+	}
+
+	palette := codeBlockPaletteFor(Options{
+		DarkBackground:     true,
+		TerminalBackground: color.RGBA{R: 32, G: 32, B: 44, A: 255},
+		Theme:              theme,
+	})
+	if got := rgba8(palette.border); got != (color.RGBA{R: 255, G: 0, B: 0, A: 255}) {
+		t.Fatalf("code block border = %+v, want theme accent", got)
+	}
+}
+
 func TestRenderThematicBreakSeparator(t *testing.T) {
 	markdown := strings.Join([]string{
 		"Before",

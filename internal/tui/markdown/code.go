@@ -112,17 +112,21 @@ func codeBlockPaletteFor(options Options) codeBlockPalette {
 		bodyText = "#E4E4E7"
 		headerText = "#A1A1AA"
 	}
+	border := options.Theme.accentColor()
+	bodyColor := options.Theme.codeTextColor(bodyText)
+	headerColor := themedColor(options.Theme.Muted, lipgloss.Color(headerText))
+	dividerColor := themedColor(options.Theme.Muted, lipgloss.Color(dividerText))
 	return codeBlockPalette{
 		background:       background,
 		headerBackground: headerBackground,
-		border:           markdownTableBorderColor,
-		headerText:       lipgloss.Color(headerText),
-		bodyText:         lipgloss.Color(bodyText),
+		border:           border,
+		headerText:       headerColor,
+		bodyText:         bodyColor,
 		dark:             options.DarkBackground,
-		borderStyle:      lipgloss.NewStyle().Foreground(markdownTableBorderColor),
-		headerStyle:      lipgloss.NewStyle().Background(headerBackground).Foreground(lipgloss.Color(headerText)),
-		bodyStyle:        lipgloss.NewStyle().Background(background).Foreground(lipgloss.Color(bodyText)),
-		iconStyle:        lipgloss.NewStyle().Background(headerBackground).Foreground(lipgloss.Color(dividerText)),
+		borderStyle:      lipgloss.NewStyle().Foreground(border),
+		headerStyle:      lipgloss.NewStyle().Background(headerBackground).Foreground(headerColor),
+		bodyStyle:        lipgloss.NewStyle().Background(background).Foreground(bodyColor),
+		iconStyle:        lipgloss.NewStyle().Background(headerBackground).Foreground(dividerColor),
 	}
 }
 

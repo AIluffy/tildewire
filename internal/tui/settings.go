@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
@@ -16,6 +17,7 @@ import (
 )
 
 type settingsDraft struct {
+	Theme                string
 	GlamourStyle         string
 	MarkdownImagePreview string
 	HTTPCacheTTLHours    string
@@ -33,7 +35,7 @@ type settingsField int
 
 const (
 	settingsFieldNone settingsField = iota
-	settingsFieldMarkdownStyle
+	settingsFieldTheme
 	settingsFieldMarkdownImagePreview
 	settingsFieldVisibleSources
 	settingsFieldGitHubToken
@@ -95,7 +97,7 @@ type settingsLineBuilder struct {
 }
 
 var settingsFocusableFields = []settingsField{
-	settingsFieldMarkdownStyle,
+	settingsFieldTheme,
 	settingsFieldMarkdownImagePreview,
 	settingsFieldVisibleSources,
 	settingsFieldGitHubToken,
@@ -103,13 +105,6 @@ var settingsFocusableFields = []settingsField{
 	settingsFieldHTTPCacheTTL,
 	settingsFieldAccessibleForms,
 	settingsFieldSave,
-}
-
-var markdownStyleSettingsOptions = []settingsOption{
-	{Label: "Dark", Value: "dark"},
-	{Label: "Light", Value: "light"},
-	{Label: "Notty", Value: "notty"},
-	{Label: "ASCII", Value: "ascii"},
 }
 
 var markdownImagePreviewSettingsOptions = []settingsOption{
@@ -186,10 +181,9 @@ func (m Model) handleSettingsMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.C
 
 func (m Model) applySettingsState(cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	next := m.config
-	next.GlamourStyle = strings.TrimSpace(m.settingsDraft.GlamourStyle)
-	if next.GlamourStyle == "" {
-		next.GlamourStyle = "dark"
-	}
+	styles := themeStylesFor(m.settingsDraft.Theme)
+	next.Theme = styles.spec.value
+	next.GlamourStyle = styles.spec.glamour
 	next.MarkdownImagePreview = normalizeSettingsMarkdownImagePreview(m.settingsDraft.MarkdownImagePreview)
 	cacheTTLHours, err := parsePositiveHours(m.settingsDraft.HTTPCacheTTLHours)
 	if err != nil {
@@ -211,6 +205,10 @@ func (m Model) applySettingsState(cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	}
 	m.service.SetSourceConfig(sourceIDsFromStrings(next.EnabledSources), sourceTokensFromConfig(next))
 	m.config = next
+	m.styles = styles
+	m.loadingSpinner = spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(styles.active))
+	m.clearDetailContentCache()
+	m.refreshDetailContentCache()
 	if !m.sourceEnabled(m.view) {
 		m.setSource(domain.SourceAll)
 	}
@@ -221,6 +219,7 @@ func (m Model) applySettingsState(cmd tea.Cmd) (tea.Model, tea.Cmd) {
 
 func (m *Model) openSettingsForm() {
 	m.settingsDraft = settingsDraft{
+		Theme:                themeStylesFor(m.config.Theme).spec.value,
 		GlamourStyle:         m.config.GlamourStyle,
 		MarkdownImagePreview: normalizeSettingsMarkdownImagePreview(m.config.MarkdownImagePreview),
 		HTTPCacheTTLHours:    strconv.Itoa(cacheTTLHoursOrDefault(m.config.HTTPCacheTTLHours)),
@@ -229,8 +228,8 @@ func (m *Model) openSettingsForm() {
 		GitHubToken:          m.config.GitHubToken,
 		ProductHuntToken:     m.config.ProductHuntToken,
 	}
-	if strings.TrimSpace(m.settingsDraft.GlamourStyle) == "" {
-		m.settingsDraft.GlamourStyle = "dark"
+	if strings.TrimSpace(m.settingsDraft.Theme) == "" {
+		m.settingsDraft.Theme = config.ThemeCatppuccin
 	}
 	m.settingsOpen = true
 	m.settingsShowGitHubToken = false
@@ -272,8 +271,8 @@ func (m *Model) focusSettingsField(field settingsField) {
 
 func (m *Model) changeSelectedSetting(delta int) {
 	switch m.selectedSettingsField() {
-	case settingsFieldMarkdownStyle:
-		m.settingsDraft.GlamourStyle = cycleSettingsOption(markdownStyleSettingsOptions, m.settingsDraft.GlamourStyle, delta)
+	case settingsFieldTheme:
+		m.settingsDraft.Theme = cycleSettingsOption(themeSettingsOptions(), m.settingsDraft.Theme, delta)
 	case settingsFieldMarkdownImagePreview:
 		m.settingsDraft.MarkdownImagePreview = cycleSettingsOption(markdownImagePreviewSettingsOptions, m.settingsDraft.MarkdownImagePreview, delta)
 	case settingsFieldVisibleSources:
@@ -291,7 +290,7 @@ func (m *Model) changeSelectedSetting(delta int) {
 
 func (m Model) activateSelectedSetting() (tea.Model, tea.Cmd) {
 	switch m.selectedSettingsField() {
-	case settingsFieldMarkdownStyle, settingsFieldMarkdownImagePreview, settingsFieldAccessibleForms:
+	case settingsFieldTheme, settingsFieldMarkdownImagePreview, settingsFieldAccessibleForms:
 		m.changeSelectedSetting(1)
 	case settingsFieldVisibleSources:
 		m.toggleSettingsSourceAtCursor()
@@ -353,8 +352,8 @@ func (m *Model) deleteSelectedSettingRune() {
 
 func (m *Model) applySettingsValue(field settingsField, value string) {
 	switch field {
-	case settingsFieldMarkdownStyle:
-		m.settingsDraft.GlamourStyle = value
+	case settingsFieldTheme:
+		m.settingsDraft.Theme = value
 	case settingsFieldMarkdownImagePreview:
 		m.settingsDraft.MarkdownImagePreview = value
 	case settingsFieldAccessibleForms:
@@ -453,7 +452,7 @@ func (m Model) renderSettingsPanel() string {
 	for _, row := range rows {
 		lines = append(lines, clip(row.line, bounds.contentWidth))
 	}
-	help := clip(settingsHelpRow(), bounds.contentWidth)
+	help := clip(m.settingsHelpRow(), bounds.contentWidth)
 	if len(lines) >= bounds.contentHeight {
 		lines = lines[:bounds.contentHeight]
 		lines[bounds.contentHeight-1] = help
@@ -463,7 +462,7 @@ func (m Model) renderSettingsPanel() string {
 		}
 		lines = append(lines, help)
 	}
-	panel := panelStyle.
+	panel := m.styles.panel.
 		Width(bounds.width).
 		Height(bounds.contentHeight).
 		Render(strings.Join(lines, "\n"))
@@ -477,9 +476,9 @@ func (m Model) settingsPanelBounds() settingsPanelBounds {
 	height := renderHeight
 	x := 0
 	y := 0
-	left := panelStyle.GetBorderLeftSize() + panelStyle.GetPaddingLeft()
-	top := panelStyle.GetBorderTopSize() + panelStyle.GetPaddingTop()
-	frameWidth, frameHeight := panelStyle.GetFrameSize()
+	left := m.styles.panel.GetBorderLeftSize() + m.styles.panel.GetPaddingLeft()
+	top := m.styles.panel.GetBorderTopSize() + m.styles.panel.GetPaddingTop()
+	frameWidth, frameHeight := m.styles.panel.GetFrameSize()
 	return settingsPanelBounds{
 		x:             x,
 		y:             y,
@@ -494,38 +493,38 @@ func (m Model) settingsPanelBounds() settingsPanelBounds {
 
 func (m Model) settingsRenderRows(width int) []settingsRenderRow {
 	rows := []settingsRenderRow{
-		{line: headerStyle.Render("tildewire SETTINGS")},
+		{line: m.styles.header.Render("tildewire SETTINGS")},
 		{line: ""},
-		settingsSectionRow("Display"),
+		m.settingsSectionRow("Display"),
 	}
 	rows = append(rows,
-		m.paddedSettingsRow(m.settingsChoiceRow(settingsFieldMarkdownStyle, "Markdown style", markdownStyleSettingsOptions, m.settingsDraft.GlamourStyle, width))...,
+		m.paddedSettingsRow(m.settingsChoiceRow(settingsFieldTheme, "Theme", themeSettingsOptions(), m.settingsDraft.Theme, width))...,
 	)
 	rows = append(rows,
 		m.settingsChoiceRow(settingsFieldMarkdownImagePreview, "Markdown image preview", markdownImagePreviewSettingsOptions, m.settingsDraft.MarkdownImagePreview, width),
-		settingsDividerRow(width),
+		m.settingsDividerRow(width),
 	)
 	rows = append(rows,
-		settingsSectionRow("Sources"),
+		m.settingsSectionRow("Sources"),
 	)
 	rows = append(rows,
 		m.paddedSettingsRow(m.settingsSourcesRow(width))...,
 	)
 	rows = append(rows,
-		settingsDividerRow(width),
+		m.settingsDividerRow(width),
 	)
 	rows = append(rows,
-		settingsSectionRow("Credentials"),
+		m.settingsSectionRow("Credentials"),
 	)
 	rows = append(rows,
 		m.paddedSettingsRow(m.settingsSecretRow(settingsFieldGitHubToken, "GitHub token", m.settingsDraft.GitHubToken, m.settingsShowGitHubToken, width))...,
 	)
 	rows = append(rows,
 		m.settingsSecretRow(settingsFieldProductHuntToken, "Product Hunt token", m.settingsDraft.ProductHuntToken, m.settingsShowProductHuntToken, width),
-		settingsDividerRow(width),
+		m.settingsDividerRow(width),
 	)
 	rows = append(rows,
-		settingsSectionRow("System"),
+		m.settingsSectionRow("System"),
 	)
 	rows = append(rows,
 		m.paddedSettingsRow(m.settingsTextRow(settingsFieldHTTPCacheTTL, "HTTP cache TTL", settingsHoursLabel(m.settingsDraft.HTTPCacheTTLHours), width))...,
@@ -541,8 +540,8 @@ func (m Model) settingsRenderRows(width int) []settingsRenderRow {
 	return rows
 }
 
-func settingsSectionRow(title string) settingsRenderRow {
-	return settingsRenderRow{line: headerStyle.Render(title)}
+func (m Model) settingsSectionRow(title string) settingsRenderRow {
+	return settingsRenderRow{line: m.styles.header.Render(title)}
 }
 
 func (m Model) paddedSettingsRow(row settingsRenderRow) []settingsRenderRow {
@@ -552,12 +551,12 @@ func (m Model) paddedSettingsRow(row settingsRenderRow) []settingsRenderRow {
 	}
 }
 
-func settingsDividerRow(width int) settingsRenderRow {
+func (m Model) settingsDividerRow(width int) settingsRenderRow {
 	dividerWidth := max(1, width-2)
-	return settingsRenderRow{line: mutedStyle.Render("  " + strings.Repeat("─", dividerWidth))}
+	return settingsRenderRow{line: m.styles.muted.Render("  " + strings.Repeat("─", dividerWidth))}
 }
 
-func settingsHelpRow() string {
+func (m Model) settingsHelpRow() string {
 	parts := []string{
 		"j/k move",
 		"click",
@@ -568,18 +567,18 @@ func settingsHelpRow() string {
 		"enter save",
 		"esc cancel",
 	}
-	return mutedStyle.Render(strings.Join(parts, " ｜ "))
+	return m.styles.muted.Render(strings.Join(parts, " ｜ "))
 }
 
 func (m Model) settingsChoiceRow(field settingsField, title string, options []settingsOption, value string, width int) settingsRenderRow {
 	focused := m.selectedSettingsField() == field
-	builder := newSettingsFieldLine(focused, title, width)
+	builder := m.newSettingsFieldLine(focused, title, width)
 	for idx, option := range options {
 		if idx > 0 {
 			builder.write(" ")
 		}
 		selected := option.Value == value
-		builder.writeHit(field, option.Value, settingsChoiceChip(option.Label, selected, focused))
+		builder.writeHit(field, option.Value, m.settingsChoiceChip(option.Label, selected, focused))
 	}
 	return settingsRenderRow{field: field, line: builder.string(), spans: builder.spans}
 }
@@ -587,7 +586,7 @@ func (m Model) settingsChoiceRow(field settingsField, title string, options []se
 func (m Model) settingsSourcesRow(width int) settingsRenderRow {
 	field := settingsFieldVisibleSources
 	focused := m.selectedSettingsField() == field
-	builder := newSettingsFieldLine(focused, "Visible sources", width)
+	builder := m.newSettingsFieldLine(focused, "Visible sources", width)
 	options := settingsSourceOptions()
 	for idx, option := range options {
 		if idx > 0 {
@@ -595,18 +594,18 @@ func (m Model) settingsSourcesRow(width int) settingsRenderRow {
 		}
 		selected := settingsSourceEnabled(m.settingsDraft.EnabledSources, option.Value)
 		subfocused := focused && idx == m.settingsSourceCursor
-		builder.writeHit(field, option.Value, settingsSourceChip(option.Label, selected, subfocused))
+		builder.writeHit(field, option.Value, m.settingsSourceChip(option.Label, selected, subfocused))
 	}
 	return settingsRenderRow{field: field, line: builder.string(), spans: builder.spans}
 }
 
 func (m Model) settingsTextRow(field settingsField, title string, value string, width int) settingsRenderRow {
 	focused := m.selectedSettingsField() == field
-	builder := newSettingsFieldLine(focused, title, width)
+	builder := m.newSettingsFieldLine(focused, title, width)
 	if focused {
-		value = controlStyle.Render(value)
+		value = m.styles.control.Render(value)
 	} else if strings.TrimSpace(value) == "(empty)" {
-		value = mutedStyle.Render(value)
+		value = m.styles.muted.Render(value)
 	}
 	builder.write(value)
 	return settingsRenderRow{field: field, line: builder.string()}
@@ -614,19 +613,19 @@ func (m Model) settingsTextRow(field settingsField, title string, value string, 
 
 func (m Model) settingsSecretRow(field settingsField, title string, value string, show bool, width int) settingsRenderRow {
 	focused := m.selectedSettingsField() == field
-	builder := newSettingsFieldLine(focused, title, width)
+	builder := m.newSettingsFieldLine(focused, title, width)
 	display := maskSettingsSecret(value)
 	if show {
 		display = emptySettingsValue(value)
 	}
 	if focused {
-		display = controlStyle.Render(display)
+		display = m.styles.control.Render(display)
 	} else if strings.TrimSpace(display) == "(empty)" {
-		display = mutedStyle.Render(display)
+		display = m.styles.muted.Render(display)
 	}
 	builder.write(display)
 	builder.write("  ")
-	builder.writeHit(field, "", settingsSecretToggleButton(focused || show), settingsActionToggleSecret)
+	builder.writeHit(field, "", m.settingsSecretToggleButton(focused || show), settingsActionToggleSecret)
 	return settingsRenderRow{field: field, line: builder.string(), spans: builder.spans}
 }
 
@@ -635,13 +634,13 @@ func (m Model) settingsActionRow(width int) settingsRenderRow {
 	builder := settingsLineBuilder{}
 	save := "Save settings"
 	if focused {
-		save = activeStyle.Render("> " + save)
+		save = m.styles.active.Render("> " + save)
 	} else {
-		save = controlStyle.Render(save)
+		save = m.styles.control.Render(save)
 	}
 	builder.writeHit(settingsFieldSave, "", save, settingsActionSave)
 	builder.write("   ")
-	builder.writeHit(settingsFieldNone, "", mutedStyle.Render("Cancel"), settingsActionCancel)
+	builder.writeHit(settingsFieldNone, "", m.styles.muted.Render("Cancel"), settingsActionCancel)
 	offset := max(0, width-builder.cell-2)
 	return settingsRenderRow{field: settingsFieldSave, line: strings.Repeat(" ", offset) + clip(builder.string(), width-offset), spans: offsetSettingsHitSpans(builder.spans, offset)}
 }
@@ -659,12 +658,12 @@ func offsetSettingsHitSpans(spans []settingsHitSpan, offset int) []settingsHitSp
 	return next
 }
 
-func newSettingsFieldLine(focused bool, title string, width int) settingsLineBuilder {
+func (m Model) newSettingsFieldLine(focused bool, title string, width int) settingsLineBuilder {
 	labelWidth := settingsLabelWidth(width)
 	builder := settingsLineBuilder{}
 	if focused {
-		builder.write(activeStyle.Render("> "))
-		builder.write(activeStyle.Render(fmt.Sprintf("%-*s", labelWidth, title)))
+		builder.write(m.styles.active.Render("> "))
+		builder.write(m.styles.active.Render(fmt.Sprintf("%-*s", labelWidth, title)))
 	} else {
 		builder.write("  ")
 		builder.write(fmt.Sprintf("%-*s", labelWidth, title))
@@ -705,30 +704,30 @@ func (b *settingsLineBuilder) string() string {
 	return b.line
 }
 
-func settingsChoiceChip(label string, selected bool, focused bool) string {
+func (m Model) settingsChoiceChip(label string, selected bool, focused bool) string {
 	chip := "[" + label + "]"
 	if selected {
 		if focused {
-			return activeStyle.Render(chip)
+			return m.styles.active.Render(chip)
 		}
-		return controlStyle.Render(chip)
+		return m.styles.control.Render(chip)
 	}
-	return mutedStyle.Render(chip)
+	return m.styles.muted.Render(chip)
 }
 
-func settingsSourceChip(label string, selected bool, focused bool) string {
+func (m Model) settingsSourceChip(label string, selected bool, focused bool) string {
 	marker := " "
 	if selected {
 		marker = "x"
 	}
 	chip := "[" + marker + "] " + label
 	if focused {
-		return activeStyle.Render(chip)
+		return m.styles.active.Render(chip)
 	}
 	if selected {
-		return okStyle.Render(chip)
+		return m.styles.ok.Render(chip)
 	}
-	return mutedStyle.Render(chip)
+	return m.styles.muted.Render(chip)
 }
 
 func settingsHoursLabel(value string) string {
@@ -755,12 +754,12 @@ func emptySettingsValue(value string) string {
 	return value
 }
 
-func settingsSecretToggleButton(active bool) string {
+func (m Model) settingsSecretToggleButton(active bool) string {
 	button := "[👁]"
 	if active {
-		return activeStyle.Render(button)
+		return m.styles.active.Render(button)
 	}
-	return mutedStyle.Render(button)
+	return m.styles.muted.Render(button)
 }
 
 func boolSettingsValue(value bool) string {

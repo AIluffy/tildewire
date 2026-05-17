@@ -75,7 +75,11 @@ func ParseImageLine(line string, baseURL string) []ImageRef {
 }
 
 // RenderImageSegment renders one image segment using the provided preview state.
-func RenderImageSegment(ref ImageRef, width int, mode string, state ImageState, ok bool) string {
+func RenderImageSegment(ref ImageRef, width int, mode string, state ImageState, ok bool, themes ...Theme) string {
+	theme := Theme{}
+	if len(themes) > 0 {
+		theme = themes[0]
+	}
 	label := fmt.Sprintf("Image: %s", imageAltOrDefault(ref.Alt))
 	displayURL := ref.Src
 	if ok && state.Src != "" {
@@ -88,7 +92,7 @@ func RenderImageSegment(ref ImageRef, width int, mode string, state ImageState, 
 	if mode == config.MarkdownImagePreviewOff {
 		return fmt.Sprintf("%s (%s)", label, displayURL)
 	}
-	mutedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#71717A"))
+	mutedStyle := lipgloss.NewStyle().Foreground(theme.mutedColor())
 	if !ok {
 		return mutedStyle.Render(fmt.Sprintf("%s (%s)", label, displayURL))
 	}

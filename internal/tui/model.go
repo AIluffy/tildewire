@@ -36,6 +36,7 @@ type Model struct {
 	detailState
 	overlayState
 	settingsState
+	styles             themeStyles
 	width              int
 	height             int
 	darkBackground     bool
@@ -54,9 +55,11 @@ func NewModel(service FeedService, initial app.Snapshot, options ...ModelOptions
 	if len(options) > 0 {
 		modelOptions = options[0]
 	}
-	if strings.TrimSpace(modelOptions.Config.GlamourStyle) == "" {
-		modelOptions.Config.GlamourStyle = "dark"
+	styles := themeStylesFor(modelOptions.Config.Theme)
+	if strings.TrimSpace(modelOptions.Config.Theme) == "" {
+		modelOptions.Config.Theme = styles.spec.value
 	}
+	modelOptions.Config.GlamourStyle = styles.spec.glamour
 	if strings.TrimSpace(modelOptions.Config.MarkdownImagePreview) == "" {
 		modelOptions.Config.MarkdownImagePreview = config.MarkdownImagePreviewAuto
 	}
@@ -82,6 +85,7 @@ func NewModel(service FeedService, initial app.Snapshot, options ...ModelOptions
 		help:       helpModel,
 		config:     modelOptions.Config,
 		saveConfig: modelOptions.SaveConfig,
+		styles:     styles,
 		feedState: feedState{
 			view:             view,
 			entries:          initial.Entries,
@@ -97,7 +101,7 @@ func NewModel(service FeedService, initial app.Snapshot, options ...ModelOptions
 		refreshState: refreshState{
 			refreshing:     true,
 			refreshID:      1,
-			loadingSpinner: spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(activeStyle)),
+			loadingSpinner: spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(styles.active)),
 		},
 		detailState: detailState{
 			images:         imageManager,

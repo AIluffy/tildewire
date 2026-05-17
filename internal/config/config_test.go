@@ -19,7 +19,7 @@ func TestLoadCreatesDefaultConfig(t *testing.T) {
 	if !cfg.ConfigCreated {
 		t.Fatal("expected first load to create config")
 	}
-	if cfg.HTTPTimeout != defaultHTTPTimeout || cfg.HTTPCacheTTLHours != defaultHTTPCacheTTLHours || cfg.GlamourStyle != defaultGlamourStyle || cfg.MarkdownImagePreview != defaultMarkdownImagePreview || cfg.AccessibleForms {
+	if cfg.HTTPTimeout != defaultHTTPTimeout || cfg.HTTPCacheTTLHours != defaultHTTPCacheTTLHours || cfg.Theme != defaultTheme || cfg.GlamourStyle != defaultGlamourStyle || cfg.MarkdownImagePreview != defaultMarkdownImagePreview || cfg.AccessibleForms {
 		t.Fatalf("unexpected defaults: %+v", cfg)
 	}
 	if !slices.Equal(cfg.EnabledSources, defaultEnabledSources()) {
@@ -33,7 +33,7 @@ func TestLoadCreatesDefaultConfig(t *testing.T) {
 func TestLoadReadsConfigFile(t *testing.T) {
 	setupHome(t)
 	path := filepath.Join(t.TempDir(), "custom.toml")
-	if err := os.WriteFile(path, []byte("http_timeout_seconds = 21\nhttp_cache_ttl_hours = 9\nglamour_style = \"light\"\naccessible_forms = true\ndebug = true\nenabled_sources = [\"github\", \"producthunt\"]\ngithub_token = \"gh-file\"\nproduct_hunt_token = \"ph-file\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("http_timeout_seconds = 21\nhttp_cache_ttl_hours = 9\ntheme = \"dracula\"\nglamour_style = \"light\"\naccessible_forms = true\ndebug = true\nenabled_sources = [\"github\", \"producthunt\"]\ngithub_token = \"gh-file\"\nproduct_hunt_token = \"ph-file\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -44,7 +44,7 @@ func TestLoadReadsConfigFile(t *testing.T) {
 	if cfg.ConfigCreated {
 		t.Fatal("existing config should not be marked created")
 	}
-	if cfg.HTTPTimeout != 21 || cfg.HTTPCacheTTLHours != 9 || cfg.GlamourStyle != "light" || !cfg.AccessibleForms || !cfg.Debug {
+	if cfg.HTTPTimeout != 21 || cfg.HTTPCacheTTLHours != 9 || cfg.Theme != "dracula" || cfg.GlamourStyle != "light" || !cfg.AccessibleForms || !cfg.Debug {
 		t.Fatalf("config values not loaded: %+v", cfg)
 	}
 	if !slices.Equal(cfg.EnabledSources, []string{"github", "producthunt"}) {
@@ -114,11 +114,12 @@ func TestLoadAndSaveEnabledSources(t *testing.T) {
 func TestLoadEnvOverridesConfigAndCLIOverridesEnv(t *testing.T) {
 	setupHome(t)
 	path := filepath.Join(t.TempDir(), "config.toml")
-	if err := os.WriteFile(path, []byte("http_timeout_seconds = 10\nglamour_style = \"light\"\naccessible_forms = false\ndebug = false\n"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("http_timeout_seconds = 10\ntheme = \"gruvbox\"\nglamour_style = \"light\"\naccessible_forms = false\ndebug = false\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("TILDEWIRE_HTTP_TIMEOUT", "33")
 	t.Setenv("TILDEWIRE_HTTP_CACHE_TTL_HOURS", "12")
+	t.Setenv("TILDEWIRE_THEME", "nord")
 	t.Setenv("TILDEWIRE_GLAMOUR_STYLE", "notty")
 	t.Setenv("TILDEWIRE_ACCESSIBLE_FORMS", "true")
 	t.Setenv("TILDEWIRE_DEBUG", "true")
@@ -127,7 +128,7 @@ func TestLoadEnvOverridesConfigAndCLIOverridesEnv(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.HTTPTimeout != 33 || cfg.HTTPCacheTTLHours != 12 || cfg.GlamourStyle != "notty" || !cfg.AccessibleForms {
+	if cfg.HTTPTimeout != 33 || cfg.HTTPCacheTTLHours != 12 || cfg.Theme != "nord" || cfg.GlamourStyle != "notty" || !cfg.AccessibleForms {
 		t.Fatalf("env overrides not applied: %+v", cfg)
 	}
 	if cfg.Debug {
@@ -266,6 +267,44 @@ func TestLoadReadsMarkdownImagePreviewFromConfigAndEnvOverrides(t *testing.T) {
 	}
 }
 
+func TestLoadAndSaveTheme(t *testing.T) {
+	setupHome(t)
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte("theme = \"Tokyo Night\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(Options{ConfigPath: path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Theme != "tokyo-night" {
+		t.Fatalf("theme = %q, want tokyo-night", cfg.Theme)
+	}
+
+	cfg.Theme = "rose-pine"
+	if err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "theme = \"rose-pine\"") {
+		t.Fatalf("theme was not persisted:\n%s", data)
+	}
+}
+
+func TestLoadRejectsInvalidThemeEnv(t *testing.T) {
+	setupHome(t)
+	t.Setenv("TILDEWIRE_THEME", "unknown-theme")
+
+	_, err := Load(Options{})
+	if err == nil || !strings.Contains(err.Error(), "TILDEWIRE_THEME") {
+		t.Fatalf("expected theme error, got %v", err)
+	}
+}
+
 func TestLoadNormalizesLegacyChafaMarkdownImagePreviewToHalfblocks(t *testing.T) {
 	setupHome(t)
 	path := filepath.Join(t.TempDir(), "config.toml")
@@ -349,6 +388,7 @@ func setupHome(t *testing.T) string {
 		"TILDEWIRE_CONFIG",
 		"TILDEWIRE_HTTP_TIMEOUT",
 		"TILDEWIRE_HTTP_CACHE_TTL_HOURS",
+		"TILDEWIRE_THEME",
 		"TILDEWIRE_GLAMOUR_STYLE",
 		"TILDEWIRE_MARKDOWN_IMAGE_PREVIEW",
 		"TILDEWIRE_ACCESSIBLE_FORMS",
