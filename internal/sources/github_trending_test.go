@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/AIluffy/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/httpcache"
 	"github.com/AIluffy/tildewire/internal/httpx"
 )
 
@@ -179,7 +180,7 @@ func TestGitHubTrendingFetchFallsBackToStale(t *testing.T) {
 	scope := domain.FetchScope{Source: domain.SourceGitHub, View: "trending", Period: "daily", ForceRefresh: true}
 	requestURL := adapter.trendingURL(scope)
 	fetchedAt := time.Date(2026, 5, 10, 9, 0, 0, 0, time.UTC)
-	cache.entries[httpx.RequestKey(http.MethodGet, requestURL)] = httpx.CacheEntry{
+	cache.entries[httpx.RequestKey(http.MethodGet, requestURL)] = httpcache.Entry{
 		RequestKey: httpx.RequestKey(http.MethodGet, requestURL),
 		Source:     string(domain.SourceGitHub),
 		Method:     http.MethodGet,

@@ -44,7 +44,7 @@ func (a HackerNewsAdapter) DefaultScopes() []domain.FetchScope {
 }
 
 // Fetch downloads a story list and its item details.
-func (a HackerNewsAdapter) Fetch(ctx context.Context, scope domain.FetchScope, client *httpx.Client) (*domain.FetchResult, error) {
+func (a HackerNewsAdapter) Fetch(ctx context.Context, scope domain.FetchScope, client httpx.Requester) (*domain.FetchResult, error) {
 	if scope.View == "" {
 		scope.View = "top"
 	}
@@ -153,7 +153,7 @@ type hnItem struct {
 }
 
 // Detail loads a Hacker News story and its top-level comments.
-func (a HackerNewsAdapter) Detail(ctx context.Context, entry domain.FeedEntry, client *httpx.Client) (domain.ItemDetail, error) {
+func (a HackerNewsAdapter) Detail(ctx context.Context, entry domain.FeedEntry, client httpx.Getter) (domain.ItemDetail, error) {
 	id, ok := hnEntryID(entry)
 	if !ok {
 		return domain.ItemDetail{}, fmt.Errorf("hackernews id is missing")
@@ -222,7 +222,7 @@ func hnEntryID(entry domain.FeedEntry) (int, bool) {
 	return 0, false
 }
 
-func fetchHNItems(ctx context.Context, client *httpx.Client, baseURL string, ids []int, forceRefresh bool) ([]hnItem, bool, string, error) {
+func fetchHNItems(ctx context.Context, client httpx.Getter, baseURL string, ids []int, forceRefresh bool) ([]hnItem, bool, string, error) {
 	type result struct {
 		idx         int
 		item        hnItem

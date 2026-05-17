@@ -67,7 +67,7 @@ func (a ProductHuntAdapter) DefaultScopes() []domain.FetchScope {
 }
 
 // Fetch posts the Product Hunt GraphQL query for one source view.
-func (a ProductHuntAdapter) Fetch(ctx context.Context, scope domain.FetchScope, client *httpx.Client) (*domain.FetchResult, error) {
+func (a ProductHuntAdapter) Fetch(ctx context.Context, scope domain.FetchScope, client httpx.Requester) (*domain.FetchResult, error) {
 	if strings.TrimSpace(a.Token) == "" {
 		return nil, ErrProductHuntAuthRequired
 	}

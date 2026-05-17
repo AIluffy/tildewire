@@ -8,7 +8,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/AIluffy/tildewire/internal/domain"
-	"github.com/AIluffy/tildewire/internal/httpx"
+	"github.com/AIluffy/tildewire/internal/httpcache"
 	"github.com/AIluffy/tildewire/internal/store/generated"
 
 	"github.com/pressly/goose/v3"
@@ -33,7 +33,7 @@ const (
 type FeedQuery = domain.FeedQuery
 
 // HTTPCacheEntry is a raw response cache row.
-type HTTPCacheEntry = httpx.CacheEntry
+type HTTPCacheEntry = httpcache.Entry
 
 // Open opens a SQLite database file.
 func Open(ctx context.Context, path string) (*Store, error) {

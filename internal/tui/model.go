@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"context"
 	"image/color"
 	"strings"
 
@@ -16,41 +15,6 @@ import (
 	tuiimage "github.com/AIluffy/tildewire/internal/tui/image"
 )
 
-// FeedService is the application surface used by the TUI.
-type FeedService interface {
-	LoadFeed(context.Context, domain.SourceID, app.FeedFilter) (app.Snapshot, error)
-	LoadDetail(context.Context, domain.FeedEntry) (domain.ItemDetail, error)
-	ExportSaved(context.Context, app.ExportOptions) (app.ExportResult, error)
-	Refresh(context.Context, domain.SourceID, app.FeedFilter, app.RefreshOptions) (app.Snapshot, error)
-	ClearCache(context.Context, domain.SourceID, app.FeedFilter) (app.Snapshot, error)
-	SetSaved(context.Context, string, bool, domain.SourceID, app.FeedFilter) (app.Snapshot, error)
-	SetRead(context.Context, string, bool, domain.SourceID, app.FeedFilter) (app.Snapshot, error)
-	SetHidden(context.Context, string, bool, domain.SourceID, app.FeedFilter) (app.Snapshot, error)
-	CreatePersonalizationRule(context.Context, domain.PersonalizationRule, domain.SourceID, app.FeedFilter) (app.Snapshot, error)
-	UpdatePersonalizationRule(context.Context, int64, domain.PersonalizationRule, domain.SourceID, app.FeedFilter) (app.Snapshot, error)
-	SetPersonalizationRuleEnabled(context.Context, int64, bool, domain.SourceID, app.FeedFilter) (app.Snapshot, error)
-	DeletePersonalizationRule(context.Context, int64, domain.SourceID, app.FeedFilter) (app.Snapshot, error)
-	IgnoreDedupeCandidate(context.Context, string, domain.SourceID, app.FeedFilter) (app.Snapshot, error)
-	SetSourceConfig([]domain.SourceID, map[domain.SourceID]string)
-}
-
-type inputMode int
-
-const (
-	inputModeNormal inputMode = iota
-	inputModeSearch
-)
-
-type feedSelectionKey struct {
-	view       domain.SourceID
-	sourceView string
-}
-
-type feedSelection struct {
-	cursor     int
-	feedOffset int
-}
-
 // ModelOptions configure optional TUI integrations.
 type ModelOptions struct {
 	Config         config.Config
@@ -62,74 +26,20 @@ type ModelOptions struct {
 
 // Model is the root Bubble Tea model.
 type Model struct {
-	service                      FeedService
-	keys                         keyMap
-	help                         help.Model
-	config                       config.Config
-	saveConfig                   func(config.Config) error
-	view                         domain.SourceID
-	entries                      []domain.FeedEntry
-	statuses                     []domain.SourceHealth
-	fetchHistory                 []domain.FetchEvent
-	rules                        []domain.PersonalizationRule
-	dedupeCandidates             []domain.DedupeCandidate
-	counts                       map[domain.SourceID]int
-	filter                       app.FeedFilter
-	mode                         inputMode
-	searchDraft                  string
-	searchBase                   string
-	searchLoadID                 int
-	paletteOpen                  bool
-	paletteFilter                string
-	paletteCursor                int
-	paletteOffset                int
-	cursor                       int
-	previewOffset                int
-	feedOffset                   int
-	feedSelections               map[feedSelectionKey]feedSelection
-	sourcesOffset                int
-	activePanel                  mainPanel
-	width                        int
-	height                       int
-	darkBackground               bool
-	terminalBackground           color.Color
-	refreshing                   bool
-	refreshID                    int
-	loadingSpinner               spinner.Model
-	detail                       bool
-	detailLoading                bool
-	detailEntryID                string
-	itemDetail                   domain.ItemDetail
-	detailError                  string
-	detailOffset                 int
-	detailLineCache              detailLineCache
-	detailImageVersion           int
-	detailRawImageDrawID         int
-	images                       *tuiimage.ImageManager
-	imagePreviewer               markdownImagePreviewer
-	imagePreviews                map[markdownImagePreviewKey]markdownImagePreviewState
-	filterOpen                   bool
-	filterDraft                  app.FeedFilter
-	filterDraftView              domain.SourceID
-	filterCursor                 int
-	health                       bool
-	rulesOpen                    bool
-	ruleCursor                   int
-	ruleForm                     *huh.Form
-	ruleDraft                    ruleDraft
-	ruleEditingID                int64
-	dedupeOpen                   bool
-	dedupeCursor                 int
-	settingsOpen                 bool
-	settingsCursor               int
-	settingsSourceCursor         int
-	settingsShowGitHubToken      bool
-	settingsShowProductHuntToken bool
-	settingsDraft                settingsDraft
-	message                      string
-	lastError                    string
-	toast                        string
-	toastID                      int
+	service    FeedService
+	keys       keyMap
+	help       help.Model
+	config     config.Config
+	saveConfig func(config.Config) error
+	feedState
+	refreshState
+	detailState
+	overlayState
+	settingsState
+	width              int
+	height             int
+	darkBackground     bool
+	terminalBackground color.Color
 }
 
 // NewModel creates the root TUI model with cached data already loaded.
@@ -167,31 +77,39 @@ func NewModel(service FeedService, initial app.Snapshot, options ...ModelOptions
 		})
 	}
 	model := Model{
-		service:          service,
-		keys:             defaultKeyMap(),
-		help:             helpModel,
-		config:           modelOptions.Config,
-		saveConfig:       modelOptions.SaveConfig,
-		view:             view,
-		entries:          initial.Entries,
-		statuses:         initial.Statuses,
-		fetchHistory:     initial.FetchHistory,
-		rules:            initial.Rules,
-		dedupeCandidates: initial.DedupeCandidates,
-		counts:           initial.Counts,
-		filter:           initial.Filter,
-		feedSelections:   make(map[feedSelectionKey]feedSelection),
-		width:            100,
-		height:           30,
-		darkBackground:   true,
-		activePanel:      panelFeed,
-		refreshing:       true,
-		refreshID:        1,
-		loadingSpinner:   spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(activeStyle)),
-		images:           imageManager,
-		imagePreviewer:   imagePreviewer,
-		imagePreviews:    make(map[markdownImagePreviewKey]markdownImagePreviewState),
-		message:          "cached feed loaded",
+		service:    service,
+		keys:       defaultKeyMap(),
+		help:       helpModel,
+		config:     modelOptions.Config,
+		saveConfig: modelOptions.SaveConfig,
+		feedState: feedState{
+			view:             view,
+			entries:          initial.Entries,
+			statuses:         initial.Statuses,
+			fetchHistory:     initial.FetchHistory,
+			rules:            initial.Rules,
+			dedupeCandidates: initial.DedupeCandidates,
+			counts:           initial.Counts,
+			filter:           initial.Filter,
+			feedSelections:   make(map[feedSelectionKey]feedSelection),
+			activePanel:      panelFeed,
+		},
+		refreshState: refreshState{
+			refreshing:     true,
+			refreshID:      1,
+			loadingSpinner: spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(activeStyle)),
+		},
+		detailState: detailState{
+			images:         imageManager,
+			imagePreviewer: imagePreviewer,
+			imagePreviews:  make(map[markdownImagePreviewKey]markdownImagePreviewState),
+		},
+		overlayState: overlayState{
+			message: "cached feed loaded",
+		},
+		width:          100,
+		height:         30,
+		darkBackground: true,
 	}
 	model.rememberFeedSelection()
 	if modelOptions.FirstRun {

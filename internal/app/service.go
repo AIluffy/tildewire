@@ -12,7 +12,7 @@ import (
 // Service coordinates stores, sources, sorting, and user state.
 type Service struct {
 	store    FeedStore
-	client   *httpx.Client
+	client   httpx.Requester
 	adapters []SourceAdapter
 	sources  []domain.SourceID
 	enabled  map[domain.SourceID]bool
@@ -62,7 +62,7 @@ type RefreshOptions struct {
 }
 
 // NewService creates an application service.
-func NewService(store FeedStore, client *httpx.Client, adapters []SourceAdapter) *Service {
+func NewService(store FeedStore, client httpx.Requester, adapters []SourceAdapter) *Service {
 	ordered := orderedAdapters(adapters)
 	enabled := enabledSourceSet(nil)
 	return &Service{
@@ -96,7 +96,11 @@ func (s *Service) SetHTTPCacheTTL(ttl time.Duration) {
 	if s.client == nil {
 		return
 	}
-	s.client.SetCacheTTL(ttl)
+	setter, ok := s.client.(httpx.CacheTTLSetter)
+	if !ok {
+		return
+	}
+	setter.SetCacheTTL(ttl)
 }
 
 // LoadFeed loads cached visible items for a view and filter.

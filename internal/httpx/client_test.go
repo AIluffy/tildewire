@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"golang.org/x/time/rate"
+
+	"github.com/AIluffy/tildewire/internal/httpcache"
 )
 
 func TestDoGETWritesCacheOnSuccess(t *testing.T) {
@@ -260,7 +262,7 @@ func TestDoGETSendsConditionalHeadersAndExtendsCacheOnNotModified(t *testing.T) 
 		w.WriteHeader(http.StatusNotModified)
 	}))
 	defer server.Close()
-	cache.entries[RequestKey(http.MethodGet, server.URL)] = CacheEntry{
+	cache.entries[RequestKey(http.MethodGet, server.URL)] = httpcache.Entry{
 		RequestKey:   RequestKey(http.MethodGet, server.URL),
 		Source:       "hackernews",
 		Method:       http.MethodGet,
@@ -576,7 +578,7 @@ func TestDoPOSTJSONFallsBackToStaleCache(t *testing.T) {
 	}))
 	defer server.Close()
 	key := requestKeyWithBody(http.MethodPost, server.URL, body)
-	cache.entries[key] = CacheEntry{
+	cache.entries[key] = httpcache.Entry{
 		RequestKey: key,
 		Source:     "producthunt",
 		Method:     http.MethodPost,
@@ -635,23 +637,23 @@ func TestDoPOSTJSONStoresCooldownFromRateLimitReset(t *testing.T) {
 }
 
 type memoryCache struct {
-	entries   map[string]CacheEntry
+	entries   map[string]httpcache.Entry
 	cooldowns map[string]time.Time
 }
 
 func newMemoryCache() *memoryCache {
 	return &memoryCache{
-		entries:   make(map[string]CacheEntry),
+		entries:   make(map[string]httpcache.Entry),
 		cooldowns: make(map[string]time.Time),
 	}
 }
 
-func (m *memoryCache) GetHTTPCache(_ context.Context, key string) (CacheEntry, bool, error) {
+func (m *memoryCache) GetHTTPCache(_ context.Context, key string) (httpcache.Entry, bool, error) {
 	entry, ok := m.entries[key]
 	return entry, ok, nil
 }
 
-func (m *memoryCache) PutHTTPCache(_ context.Context, entry CacheEntry) error {
+func (m *memoryCache) PutHTTPCache(_ context.Context, entry httpcache.Entry) error {
 	m.entries[entry.RequestKey] = entry
 	return nil
 }
@@ -667,7 +669,7 @@ func (m *memoryCache) SetRateLimitCooldown(_ context.Context, source, bucket str
 }
 
 func (m *memoryCache) put(url, body string, fetchedAt, expiresAt time.Time) {
-	m.entries[RequestKey(http.MethodGet, url)] = CacheEntry{
+	m.entries[RequestKey(http.MethodGet, url)] = httpcache.Entry{
 		RequestKey: RequestKey(http.MethodGet, url),
 		Source:     "hackernews",
 		Method:     http.MethodGet,

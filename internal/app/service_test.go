@@ -1230,7 +1230,7 @@ func (f *fakeAdapter) DefaultScopes() []domain.FetchScope {
 	return []domain.FetchScope{{Source: domain.SourceHackerNews, View: "top", Limit: 10}}
 }
 
-func (f *fakeAdapter) Fetch(ctx context.Context, scope domain.FetchScope, _ *httpx.Client) (*domain.FetchResult, error) {
+func (f *fakeAdapter) Fetch(ctx context.Context, scope domain.FetchScope, _ httpx.Requester) (*domain.FetchResult, error) {
 	f.sawForce = scope.ForceRefresh
 	f.calls = append(f.calls, scope)
 	if f.startSignal != nil {
@@ -1276,7 +1276,7 @@ func (f *fakeAdapter) SetToken(token string) {
 	f.token = token
 }
 
-func (f *fakeAdapter) Detail(context.Context, domain.FeedEntry, *httpx.Client) (domain.ItemDetail, error) {
+func (f *fakeAdapter) Detail(context.Context, domain.FeedEntry, httpx.Getter) (domain.ItemDetail, error) {
 	f.detailCalls++
 	return f.detail, f.detailErr
 }

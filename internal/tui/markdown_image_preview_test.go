@@ -96,10 +96,12 @@ func TestRenderMarkdownImageSegmentRendersOnlyImageWithEqualVerticalMargins(t *t
 	width := 24
 	model := Model{
 		config: config.Config{MarkdownImagePreview: config.MarkdownImagePreviewAuto},
-		imagePreviews: map[markdownImagePreviewKey]markdownImagePreviewState{
-			{URL: ref.URL, Mode: config.MarkdownImagePreviewHalfblocks, Width: width}: {
-				Content: "pixels-a\npixels-b",
-				Backend: "halfblocks",
+		detailState: detailState{
+			imagePreviews: map[markdownImagePreviewKey]markdownImagePreviewState{
+				{URL: ref.URL, Mode: config.MarkdownImagePreviewHalfblocks, Width: width}: {
+					Content: "pixels-a\npixels-b",
+					Backend: "halfblocks",
+				},
 			},
 		},
 	}

@@ -11,7 +11,7 @@ import (
 type SourceAdapter interface {
 	Source() domain.SourceID
 	DefaultScopes() []domain.FetchScope
-	Fetch(context.Context, domain.FetchScope, *httpx.Client) (*domain.FetchResult, error)
+	Fetch(context.Context, domain.FetchScope, httpx.Requester) (*domain.FetchResult, error)
 	Normalize(context.Context, domain.FetchScope, *domain.FetchResult) ([]domain.FeedItem, error)
 	CachePolicy(domain.FetchScope) domain.CachePolicy
 }
@@ -28,7 +28,7 @@ type TokenAdapter interface {
 
 // DetailAdapter optionally enriches an item detail view with source-native content.
 type DetailAdapter interface {
-	Detail(context.Context, domain.FeedEntry, *httpx.Client) (domain.ItemDetail, error)
+	Detail(context.Context, domain.FeedEntry, httpx.Getter) (domain.ItemDetail, error)
 }
 
 // FeedStore is the persistence surface required by Service.

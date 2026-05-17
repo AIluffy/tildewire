@@ -14,41 +14,16 @@ import (
 
 	"github.com/hashicorp/go-retryablehttp"
 	"golang.org/x/time/rate"
+
+	"github.com/AIluffy/tildewire/internal/httpcache"
 )
 
 // Client wraps HTTP retries, timeouts, and per-source token buckets.
 type Client struct {
 	client   *retryablehttp.Client
 	limiters map[string]*rate.Limiter
-	cache    CacheStore
+	cache    httpcache.Store
 	cacheTTL time.Duration
-}
-
-// CacheEntry is a raw HTTP response stored for stale-while-revalidate.
-type CacheEntry struct {
-	RequestKey   string
-	Source       string
-	Method       string
-	URL          string
-	StatusCode   int
-	HeadersJSON  string
-	Body         []byte
-	FetchedAt    time.Time
-	ExpiresAt    time.Time
-	ETag         string
-	LastModified string
-}
-
-// CacheStore persists and loads raw HTTP responses.
-type CacheStore interface {
-	GetHTTPCache(context.Context, string) (CacheEntry, bool, error)
-	PutHTTPCache(context.Context, CacheEntry) error
-}
-
-// CooldownStore persists source-specific rate-limit cooldowns.
-type CooldownStore interface {
-	RateLimitCooldown(context.Context, string, string) (time.Time, bool, error)
-	SetRateLimitCooldown(context.Context, string, string, time.Time) error
 }
 
 const (
@@ -73,7 +48,7 @@ type GetOptions struct {
 	TTL             time.Duration
 	ForceRefresh    bool
 	MaxBodyBytes    int64
-	Cache           CacheStore
+	Cache           httpcache.Store
 	BearerToken     string
 }
 
@@ -90,8 +65,29 @@ type Response struct {
 	StaleReason string
 }
 
+// Getter performs cache-aware GET requests.
+type Getter interface {
+	DoGET(context.Context, GetOptions) (Response, error)
+}
+
+// Poster performs cache-aware JSON POST requests.
+type Poster interface {
+	DoPOSTJSON(context.Context, PostOptions) (Response, error)
+}
+
+// Requester performs the HTTP operations required by source adapters.
+type Requester interface {
+	Getter
+	Poster
+}
+
+// CacheTTLSetter updates the raw HTTP cache lifetime when supported.
+type CacheTTLSetter interface {
+	SetCacheTTL(time.Duration)
+}
+
 // New creates the default HTTP client used by source adapters.
-func New(timeout time.Duration, caches ...CacheStore) *Client {
+func New(timeout time.Duration, caches ...httpcache.Store) *Client {
 	retry := retryablehttp.NewClient()
 	retry.RetryMax = 2
 	retry.RetryWaitMin = 300 * time.Millisecond
@@ -145,7 +141,7 @@ func (c *Client) DoGET(ctx context.Context, options GetOptions) (Response, error
 	key := RequestKey(http.MethodGet, options.URL)
 	now := time.Now().UTC()
 
-	var cached CacheEntry
+	var cached httpcache.Entry
 	hasCache := false
 	if options.Cache != nil {
 		entry, ok, err := options.Cache.GetHTTPCache(ctx, key)
@@ -158,7 +154,7 @@ func (c *Client) DoGET(ctx context.Context, options GetOptions) (Response, error
 			return responseFromCache(cached, false, ""), nil
 		}
 	}
-	if cooldowns, ok := options.Cache.(CooldownStore); ok {
+	if cooldowns, ok := options.Cache.(httpcache.CooldownStore); ok {
 		cooldownUntil, ok, err := cooldowns.RateLimitCooldown(ctx, source, key)
 		if err != nil {
 			return Response{}, fmt.Errorf("load rate-limit cooldown: %w", err)
@@ -235,7 +231,7 @@ func (c *Client) DoGET(ctx context.Context, options GetOptions) (Response, error
 		staleReason := StaleReasonNetworkError
 		if isRateLimited(resp.StatusCode) {
 			staleReason = StaleReasonRateLimited
-			if cooldowns, ok := options.Cache.(CooldownStore); ok {
+			if cooldowns, ok := options.Cache.(httpcache.CooldownStore); ok {
 				cooldownUntil := rateLimitCooldownUntil(resp.Header, time.Now().UTC())
 				if err := cooldowns.SetRateLimitCooldown(ctx, source, key, cooldownUntil); err != nil {
 					return Response{}, fmt.Errorf("store rate-limit cooldown: %w", err)
@@ -262,7 +258,7 @@ func (c *Client) DoGET(ctx context.Context, options GetOptions) (Response, error
 		ExpiresAt:  fetchedAt.Add(ttl),
 	}
 	if options.Cache != nil {
-		entry := CacheEntry{
+		entry := httpcache.Entry{
 			RequestKey:   key,
 			Source:       source,
 			Method:       http.MethodGet,
@@ -291,7 +287,7 @@ type PostOptions struct {
 	TTL          time.Duration
 	ForceRefresh bool
 	MaxBodyBytes int64
-	Cache        CacheStore
+	Cache        httpcache.Store
 }
 
 // DoPOSTJSON performs a cache-aware, rate-limited JSON POST.
@@ -314,7 +310,7 @@ func (c *Client) DoPOSTJSON(ctx context.Context, options PostOptions) (Response,
 	key := requestKeyWithBody(http.MethodPost, options.URL, options.Body)
 	now := time.Now().UTC()
 
-	var cached CacheEntry
+	var cached httpcache.Entry
 	hasCache := false
 	if options.Cache != nil {
 		entry, ok, err := options.Cache.GetHTTPCache(ctx, key)
@@ -327,7 +323,7 @@ func (c *Client) DoPOSTJSON(ctx context.Context, options PostOptions) (Response,
 			return responseFromCache(cached, false, ""), nil
 		}
 	}
-	if cooldowns, ok := options.Cache.(CooldownStore); ok {
+	if cooldowns, ok := options.Cache.(httpcache.CooldownStore); ok {
 		cooldownUntil, ok, err := cooldowns.RateLimitCooldown(ctx, source, key)
 		if err != nil {
 			return Response{}, fmt.Errorf("load rate-limit cooldown: %w", err)
@@ -377,7 +373,7 @@ func (c *Client) DoPOSTJSON(ctx context.Context, options PostOptions) (Response,
 		staleReason := StaleReasonNetworkError
 		if isRateLimited(resp.StatusCode) {
 			staleReason = StaleReasonRateLimited
-			if cooldowns, ok := options.Cache.(CooldownStore); ok {
+			if cooldowns, ok := options.Cache.(httpcache.CooldownStore); ok {
 				cooldownUntil := rateLimitCooldownUntil(resp.Header, time.Now().UTC())
 				if err := cooldowns.SetRateLimitCooldown(ctx, source, key, cooldownUntil); err != nil {
 					return Response{}, fmt.Errorf("store rate-limit cooldown: %w", err)
@@ -404,7 +400,7 @@ func (c *Client) DoPOSTJSON(ctx context.Context, options PostOptions) (Response,
 		ExpiresAt:  fetchedAt.Add(ttl),
 	}
 	if options.Cache != nil {
-		entry := CacheEntry{
+		entry := httpcache.Entry{
 			RequestKey:   key,
 			Source:       source,
 			Method:       http.MethodPost,
@@ -434,7 +430,7 @@ func (c *Client) resolveCacheTTL(ttl time.Duration) time.Duration {
 	return defaultCacheTTL
 }
 
-func (c *Client) cacheEntryWithTTL(entry CacheEntry, ttl time.Duration) CacheEntry {
+func (c *Client) cacheEntryWithTTL(entry httpcache.Entry, ttl time.Duration) httpcache.Entry {
 	if c.cacheTTL <= 0 || entry.FetchedAt.IsZero() {
 		return entry
 	}
@@ -456,7 +452,7 @@ func requestKeyWithBody(method, url string, body []byte) string {
 	return fmt.Sprintf("%s body-sha256:%x", RequestKey(method, url), sum)
 }
 
-func responseFromCache(entry CacheEntry, stale bool, staleReason string) Response {
+func responseFromCache(entry httpcache.Entry, stale bool, staleReason string) Response {
 	return Response{
 		Source:      entry.Source,
 		URL:         entry.URL,

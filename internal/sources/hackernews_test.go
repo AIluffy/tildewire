@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/AIluffy/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/httpcache"
 	"github.com/AIluffy/tildewire/internal/httpx"
 )
 
@@ -255,21 +256,21 @@ func TestHackerNewsDetailLoadsTopLevelComments(t *testing.T) {
 
 type sourceTestCache struct {
 	mu      sync.Mutex
-	entries map[string]httpx.CacheEntry
+	entries map[string]httpcache.Entry
 }
 
 func newSourceTestCache() *sourceTestCache {
-	return &sourceTestCache{entries: make(map[string]httpx.CacheEntry)}
+	return &sourceTestCache{entries: make(map[string]httpcache.Entry)}
 }
 
-func (c *sourceTestCache) GetHTTPCache(_ context.Context, key string) (httpx.CacheEntry, bool, error) {
+func (c *sourceTestCache) GetHTTPCache(_ context.Context, key string) (httpcache.Entry, bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	entry, ok := c.entries[key]
 	return entry, ok, nil
 }
 
-func (c *sourceTestCache) PutHTTPCache(_ context.Context, entry httpx.CacheEntry) error {
+func (c *sourceTestCache) PutHTTPCache(_ context.Context, entry httpcache.Entry) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.entries[entry.RequestKey] = entry

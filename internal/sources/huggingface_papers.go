@@ -39,7 +39,7 @@ func (a HuggingFacePapersAdapter) DefaultScopes() []domain.FetchScope {
 }
 
 // Fetch downloads one Hugging Face Daily Papers page.
-func (a HuggingFacePapersAdapter) Fetch(ctx context.Context, scope domain.FetchScope, client *httpx.Client) (*domain.FetchResult, error) {
+func (a HuggingFacePapersAdapter) Fetch(ctx context.Context, scope domain.FetchScope, client httpx.Requester) (*domain.FetchResult, error) {
 	scope = normalizeHuggingFaceScope(scope)
 	resp, err := client.DoGET(ctx, httpx.GetOptions{
 		Source:       string(domain.SourceHuggingFace),
@@ -95,7 +95,7 @@ func (a HuggingFacePapersAdapter) CachePolicy(domain.FetchScope) domain.CachePol
 }
 
 // Detail expands Hugging Face paper metadata already stored with the item.
-func (a HuggingFacePapersAdapter) Detail(_ context.Context, entry domain.FeedEntry, _ *httpx.Client) (domain.ItemDetail, error) {
+func (a HuggingFacePapersAdapter) Detail(_ context.Context, entry domain.FeedEntry, _ httpx.Getter) (domain.ItemDetail, error) {
 	if entry.Item.Refs.PaperID == "" && entry.Item.Refs.ArxivID == "" {
 		return domain.ItemDetail{}, fmt.Errorf("huggingface paper id is missing")
 	}

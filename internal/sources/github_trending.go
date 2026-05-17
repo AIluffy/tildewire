@@ -65,7 +65,7 @@ func (a GitHubTrendingAdapter) DefaultScopes() []domain.FetchScope {
 }
 
 // Fetch downloads one GitHub Trending HTML page.
-func (a GitHubTrendingAdapter) Fetch(ctx context.Context, scope domain.FetchScope, client *httpx.Client) (*domain.FetchResult, error) {
+func (a GitHubTrendingAdapter) Fetch(ctx context.Context, scope domain.FetchScope, client httpx.Requester) (*domain.FetchResult, error) {
 	scope = normalizeGitHubScope(scope)
 	resp, err := client.DoGET(ctx, httpx.GetOptions{
 		Source:       string(domain.SourceGitHub),
@@ -114,7 +114,7 @@ func (a GitHubTrendingAdapter) CachePolicy(scope domain.FetchScope) domain.Cache
 }
 
 // Detail loads a GitHub README preview for repository items.
-func (a GitHubTrendingAdapter) Detail(ctx context.Context, entry domain.FeedEntry, client *httpx.Client) (domain.ItemDetail, error) {
+func (a GitHubTrendingAdapter) Detail(ctx context.Context, entry domain.FeedEntry, client httpx.Getter) (domain.ItemDetail, error) {
 	repo := normalize.NormalizeRepo(entry.Item.Refs.Repo)
 	if repo == "" {
 		return domain.ItemDetail{}, fmt.Errorf("github repo is missing")

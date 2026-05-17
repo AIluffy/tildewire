@@ -39,7 +39,7 @@ func (a LobstersAdapter) DefaultScopes() []domain.FetchScope {
 }
 
 // Fetch downloads one Lobsters JSON page.
-func (a LobstersAdapter) Fetch(ctx context.Context, scope domain.FetchScope, client *httpx.Client) (*domain.FetchResult, error) {
+func (a LobstersAdapter) Fetch(ctx context.Context, scope domain.FetchScope, client httpx.Requester) (*domain.FetchResult, error) {
 	scope = normalizeLobstersScope(scope)
 	resp, err := client.DoGET(ctx, httpx.GetOptions{
 		Source:       string(domain.SourceLobsters),
@@ -105,7 +105,7 @@ func (a LobstersAdapter) CachePolicy(scope domain.FetchScope) domain.CachePolicy
 }
 
 // Detail loads one Lobsters story and returns top-level comments.
-func (a LobstersAdapter) Detail(ctx context.Context, entry domain.FeedEntry, client *httpx.Client) (domain.ItemDetail, error) {
+func (a LobstersAdapter) Detail(ctx context.Context, entry domain.FeedEntry, client httpx.Getter) (domain.ItemDetail, error) {
 	id := lobstersEntryID(entry)
 	if id == "" {
 		return domain.ItemDetail{}, fmt.Errorf("lobsters id is missing")

@@ -8,7 +8,7 @@ import (
 
 	"github.com/AIluffy/tildewire/internal/dedupe"
 	"github.com/AIluffy/tildewire/internal/domain"
-	"github.com/AIluffy/tildewire/internal/httpx"
+	"github.com/AIluffy/tildewire/internal/httpcache"
 )
 
 func TestStoreMigratesUpsertsStateAndHiddenFiltering(t *testing.T) {
@@ -594,8 +594,8 @@ func TestStoreHTTPCacheRoundTrip(t *testing.T) {
 
 	fetchedAt := time.Date(2026, 5, 10, 10, 0, 0, 0, time.UTC)
 	expiresAt := fetchedAt.Add(time.Hour)
-	entry := httpx.CacheEntry{
-		RequestKey:   httpx.RequestKey("GET", "https://example.com/api"),
+	entry := httpcache.Entry{
+		RequestKey:   "GET https://example.com/api",
 		Source:       "hackernews",
 		Method:       "GET",
 		URL:          "https://example.com/api",
@@ -638,8 +638,8 @@ func TestStoreClearCacheRemovesCachedDataAndKeepsSavedItems(t *testing.T) {
 	if err := store.SetSaved(ctx, saved.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	cacheEntry := httpx.CacheEntry{
-		RequestKey: httpx.RequestKey("GET", "https://example.com/api"),
+	cacheEntry := httpcache.Entry{
+		RequestKey: "GET https://example.com/api",
 		Source:     "hackernews",
 		Method:     "GET",
 		URL:        "https://example.com/api",
