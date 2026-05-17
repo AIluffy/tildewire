@@ -31,4 +31,3 @@ jobs:
       - name: Build
         run: |
           go build -trimpath -ldflags "-s -w -X main.version=ci" -o /tmp/tildewire .
-          go build -trimpath -ldflags "-s -w -X main.version=ci" -o /tmp/tw ./cmd/tw
