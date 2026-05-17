@@ -10,7 +10,7 @@ import (
 var version = "dev"
 
 func main() {
-	if err := launcher.Run(launcher.DisplayName(os.Args[0]), version, os.Args[1:], os.Stdout); err != nil {
+	if err := launcher.Run("tildewire", version, os.Args[1:], os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

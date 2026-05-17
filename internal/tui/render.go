@@ -45,9 +45,10 @@ type mainLayout struct {
 }
 
 const (
-	feedItemContentRows = 2
-	feedItemBlockRows   = 3
-	feedTitleMarginRows = 1
+	feedItemContentRows  = 2
+	feedItemBlockRows    = 3
+	feedTitleMarginRows  = 1
+	maxSourcesPanelWidth = 32
 )
 
 type panelBox struct {
@@ -112,7 +113,7 @@ func (m Model) mainLayout() mainLayout {
 	minFeedWidth := frameWidth + 16
 	bodyHeight := max(1, renderHeight-2-renderedBlockHeight(m.renderMainHelp()))
 
-	sourcesWidth := clamp(renderWidth/5, minPanelWidth, 24)
+	sourcesWidth := clamp(renderWidth/5, minPanelWidth, maxSourcesPanelWidth)
 	previousPreviewWidth := clamp(renderWidth/3, minPanelWidth, 48)
 	previewWidth := clamp(renderWidth*2/5, minPanelWidth, 64)
 	feedWidth := renderWidth - sourcesWidth - previewWidth
@@ -241,7 +242,7 @@ func (m Model) renderSources(width, height int) string {
 	start := clamp(m.sourcesOffset, 0, maxSourceOffset(len(rows), visibleRows))
 	end := min(len(rows), start+visibleRows)
 	for _, row := range rows[start:end] {
-		lines = append(lines, clip(row.render(m), width))
+		lines = append(lines, clip(row.render(m, width), width))
 	}
 	return fillLines(lines, height)
 }
@@ -259,9 +260,10 @@ func (m Model) renderFeed(width, height int) string {
 	visibleRows := feedVisibleRowsFor(height, m.feedTopRows())
 	start := clamp(m.feedOffset, 0, maxFeedOffset(len(m.entries), visibleRows))
 	end := min(len(m.entries), start+visibleRows)
+	indexWidth := feedIndexWidth(len(m.entries))
 	for idx := start; idx < end; idx++ {
 		entry := m.entries[idx]
-		lines = append(lines, renderFeedItemLine(idx, entry, idx == m.cursor, width, m.filter.Search))
+		lines = append(lines, renderFeedItemLine(idx, entry, idx == m.cursor, width, m.filter.Search, indexWidth))
 		lines = append(lines, m.renderFeedItemSubtitle(entry, width))
 		lines = append(lines, "")
 	}

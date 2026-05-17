@@ -5,15 +5,14 @@ Repo guidance for coding agents working on tildewire.
 ## Core Rules
 
 - tildewire is a Go terminal TUI. Keep product workflows inside the TUI, not new CLI subcommands, unless the user explicitly changes CLI scope.
-- Supported command shape: `tildewire [--config path] [--debug] [--version] [--help]`; `tw` is the short daily alias with the same flags.
-- Installers must not overwrite an existing `tw`; install `tildewire` first and create the short entrypoint only when there is no conflict.
+- Supported command shape: `tildewire [--config path] [--debug] [--version] [--help]`.
 - Current sources are GitHub Trending, Hacker News, Hugging Face Papers, Lobsters, and optional token-gated Product Hunt.
 - Use `README.md` for current user-facing behavior, and use `docs/PRD.md`, `docs/TECHNICAL_DESIGN.md`, `docs/ROADMAP.md`, and `docs/RELEASE_NOTES.md` as product and architecture references.
 
 ## Boundaries
 
 - `internal/boot`: flags.
-- `internal/launcher`: shared startup wiring for `tildewire` and `tw`.
+- `internal/launcher`: shared startup wiring for the canonical binary.
 - `internal/config`: config, paths, env overrides, persistence.
 - `internal/domain`: shared source, item, detail, filter, and personalization types.
 - `internal/sources`: source fetch and normalization only.
@@ -21,7 +20,7 @@ Repo guidance for coding agents working on tildewire.
 - `internal/normalize`: URL, repository, and arXiv canonicalization helpers.
 - `internal/score` and `internal/dedupe`: ranking and similarity algorithms.
 - `internal/app`: feed loading, refresh orchestration, filtering, scoring, item state, personalization, dedupe, and export.
-- `internal/store`: SQLite, goose migrations, transactions, sqlc queries.
+- `internal/store`: SQLite, embedded migrations, transactions, sqlc queries.
 - `internal/tui`: Bubble Tea model, views, key handling, settings, palette, browser/clipboard commands, Markdown rendering, and terminal image preview coordination.
 
 Do not perform blocking I/O directly in Bubble Tea `Update()` methods. Route I/O through commands and application services.
@@ -48,7 +47,6 @@ Run the narrowest meaningful checks before reporting completion:
 ```bash
 go test ./...
 go build -o tildewire .
-go build -o tw ./cmd/tw
 go run . --help
 scripts/install-local.sh /private/tmp/tildewire-install-check
 ```

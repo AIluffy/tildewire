@@ -6,7 +6,6 @@ v0.3 completes the personalization and observability slice for repeat users who 
 
 ### Added
 
-- Optional `tw` short entrypoint for daily terminal use, sharing the same TUI, flags, config, cache, data, and state paths as `tildewire`; local installation skips `tw` when the name is already taken.
 - SQLite FTS5-backed search for title, summary, metadata, tags, repository refs, author, organization, and source-specific identifiers.
 - Source health and recent fetch history in the `!` panel, including status, timing, stale reasons, item counts, and recent errors.
 - Personalization rules for boost, mute, and hide effects across keyword, language, tag, domain, source, repo, and author targets.

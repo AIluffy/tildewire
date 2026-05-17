@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -106,6 +107,27 @@ func TestModelRenderActiveAllCountUsesSnapshotTotal(t *testing.T) {
 	t.Fatalf("active All row missing:\n%s", rendered)
 }
 
+func TestModelRenderSourcesSpreadsCountsToRightEdge(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	snapshot.Counts[domain.SourceProductHunt] = 12
+	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+
+	rendered := ansi.Strip(model.renderSources(28, 8))
+	for _, line := range strings.Split(rendered, "\n") {
+		if !strings.Contains(line, "Product Hunt") {
+			continue
+		}
+		if got := ansi.StringWidth(line); got != 28 {
+			t.Fatalf("Product Hunt source line width = %d, want 28:\n%s", got, rendered)
+		}
+		if !strings.HasSuffix(line, "12") {
+			t.Fatalf("Product Hunt source count should align to the right edge:\n%q", line)
+		}
+		return
+	}
+	t.Fatalf("Product Hunt source row missing:\n%s", rendered)
+}
+
 func TestModelRenderSourceBadgesUseDistinctColors(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	now := snapshot.LoadedAt
@@ -174,6 +196,51 @@ func TestModelRenderFeedAddsMarginBetweenItems(t *testing.T) {
 	}
 }
 
+func TestModelRenderFeedAlignsTitlesAcrossIndexDigitBoundaries(t *testing.T) {
+	for _, tc := range []struct {
+		total  int
+		before int
+		after  int
+	}{
+		{total: 10, before: 9, after: 10},
+		{total: 100, before: 99, after: 100},
+	} {
+		t.Run(fmt.Sprintf("%d_to_%d", tc.before, tc.after), func(t *testing.T) {
+			snapshot := tuiSnapshot(false)
+			snapshot.Entries = make([]domain.FeedEntry, tc.total)
+			for idx := range snapshot.Entries {
+				itemNumber := idx + 1
+				snapshot.Entries[idx] = feedEntry(
+					fmt.Sprintf("id-%03d", itemNumber),
+					fmt.Sprintf("Item %03d", itemNumber),
+					domain.SourceGitHub,
+					itemNumber,
+					snapshot.LoadedAt,
+				)
+			}
+			model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+			model.feedOffset = tc.before - 1
+			model.cursor = tc.after - 1
+
+			rendered := ansi.Strip(model.renderFeed(80, 8))
+			lines := strings.Split(rendered, "\n")
+			if len(lines) < 6 {
+				t.Fatalf("feed rendered too few lines:\n%s", rendered)
+			}
+			beforeTitle := fmt.Sprintf("Item %03d", tc.before)
+			afterTitle := fmt.Sprintf("Item %03d", tc.after)
+			beforeColumn := strings.Index(lines[2], beforeTitle)
+			afterColumn := strings.Index(lines[5], afterTitle)
+			if beforeColumn < 0 || afterColumn < 0 {
+				t.Fatalf("feed missing boundary titles %q/%q:\n%s", beforeTitle, afterTitle, rendered)
+			}
+			if beforeColumn != afterColumn {
+				t.Fatalf("title columns around %d -> %d = %d/%d, want aligned:\n%s", tc.before, tc.after, beforeColumn, afterColumn, rendered)
+			}
+		})
+	}
+}
+
 func TestModelRenderKeepsMainPanelsWithinTerminalWidth(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	snapshot.Entries[0].Item.Title = "A very long HF paper title with wide characters 模型模型模型 and no helpful short ending"
@@ -221,6 +288,21 @@ func TestModelMainLayoutGivesPreviewMoreRoomWithoutCrowdingFeed(t *testing.T) {
 	}
 	if layout.feed.width < layout.preview.width {
 		t.Fatalf("feed width = %d, want at least preview width %d", layout.feed.width, layout.preview.width)
+	}
+	if got := layout.sources.width + layout.feed.width + layout.preview.width; got != model.width {
+		t.Fatalf("panel widths sum = %d, want %d", got, model.width)
+	}
+}
+
+func TestModelMainLayoutExpandsSourcesOnWideScreens(t *testing.T) {
+	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false))
+	model.width = 180
+	model.height = 22
+
+	layout := model.mainLayout()
+
+	if layout.sources.width != 32 {
+		t.Fatalf("sources width = %d, want 32 for wide terminals", layout.sources.width)
 	}
 	if got := layout.sources.width + layout.feed.width + layout.preview.width; got != model.width {
 		t.Fatalf("panel widths sum = %d, want %d", got, model.width)

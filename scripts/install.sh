@@ -105,36 +105,6 @@ install_binary() {
 	fi
 }
 
-install_short_alias() {
-	canonical="$bin_dir/tildewire"
-	short="$bin_dir/tw"
-
-	if existing="$(command -v tw 2>/dev/null)"; then
-		if [ "$existing" != "$short" ]; then
-			printf 'skipped tw: command already exists at %s\n' "$existing"
-			printf 'use tildewire, or choose a private shell alias such as twire or tdw\n'
-			return 0
-		fi
-	fi
-
-	if [ -e "$short" ] || [ -L "$short" ]; then
-		if [ -L "$short" ]; then
-			link_target="$(readlink "$short" || true)"
-			if [ "$link_target" = "$canonical" ] || [ "$link_target" = "tildewire" ]; then
-				ln -sf "$canonical" "$short"
-				printf 'installed tw: %s -> %s\n' "$short" "$canonical"
-				return 0
-			fi
-		fi
-		printf 'skipped tw: path already exists at %s\n' "$short"
-		printf 'use tildewire, or choose a private shell alias such as twire or tdw\n'
-		return 0
-	fi
-
-	ln -s "$canonical" "$short"
-	printf 'installed tw: %s -> %s\n' "$short" "$canonical"
-}
-
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT INT TERM
 
@@ -153,7 +123,6 @@ verify_checksum "$tmpdir/checksums.txt" "$archive" "$tmpdir/$archive"
 tar -xzf "$tmpdir/$archive" -C "$tmpdir" tildewire
 install_binary "$tmpdir/tildewire" "$bin_dir/tildewire"
 printf 'installed tildewire: %s\n' "$bin_dir/tildewire"
-install_short_alias
 
 case ":$PATH:" in
 *":$bin_dir:"*) ;;

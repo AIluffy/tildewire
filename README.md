@@ -8,10 +8,9 @@ The product is intentionally TUI-first. The supported command shape stays small:
 
 ```text
 tildewire [--config path] [--debug] [--version] [--help]
-tw [--config path] [--debug] [--version] [--help]
 ```
 
-`tildewire` is the canonical product and binary name. `tw` is the short daily terminal entrypoint; it launches the same TUI and uses the same config, cache, data, and state paths. Installers should never overwrite an existing `tw` command.
+`tildewire` is the canonical product and binary name.
 
 There are no `fetch`, `list`, `export`, `cache`, or `config` subcommands. Scanning, refresh, filtering, saving, hiding, export, source health, and cache management all live inside the terminal UI.
 
@@ -25,7 +24,7 @@ Install the canonical binary on macOS or Linux with the tildewire tap:
 brew install --cask AIluffy/tap/tildewire
 ```
 
-The Homebrew cask installs `tildewire` only. Use the install script if you want conflict-safe `tw` setup.
+The Homebrew cask installs `tildewire`.
 
 ### Install Script
 
@@ -41,7 +40,7 @@ Install a specific release:
 curl -fsSL https://raw.githubusercontent.com/AIluffy/tildewire/main/scripts/install.sh | TILDEWIRE_VERSION=v0.1.0 sh
 ```
 
-The installer downloads the matching release archive, verifies it against `checksums.txt`, installs `tildewire` to `${TILDEWIRE_BIN_DIR:-$HOME/.local/bin}`, and creates `tw` as a symlink only when no existing `tw` command or target path is found.
+The installer downloads the matching release archive, verifies it against `checksums.txt`, and installs `tildewire` to `${TILDEWIRE_BIN_DIR:-$HOME/.local/bin}`.
 
 ### Go
 
@@ -51,7 +50,7 @@ Install the canonical binary with Go:
 go install github.com/AIluffy/tildewire@latest
 ```
 
-This installs `tildewire` only. If you want the short `tw` entrypoint, use the release installer or create a private shell alias.
+This installs `tildewire`.
 
 ### Release Assets
 
@@ -69,7 +68,6 @@ Download binaries and packages from the [releases](https://github.com/AIluffy/ti
 git clone https://github.com/AIluffy/tildewire.git
 cd tildewire
 go build -o tildewire .
-go build -o tw ./cmd/tw
 ```
 
 ## What It Does
@@ -86,7 +84,7 @@ go build -o tw ./cmd/tw
 
 ## Daily Workflow
 
-1. Start tildewire with `go run .` during development, `tildewire` as the canonical command, or `tw` for daily terminal use after building/installing.
+1. Start tildewire with `go run .` during development, or `tildewire` after building/installing.
 2. Cached feed data appears first so the TUI is useful before network refresh completes.
 3. Background refresh updates enabled sources and source health without blocking the UI.
 4. Use the Sources panel or number shortcuts to choose All, GitHub, Hacker News, Hugging Face Papers, Lobsters, or Product Hunt.
@@ -313,7 +311,6 @@ Useful startup commands:
 
 ```bash
 go run . --help
-go run ./cmd/tw --help
 go run . --version
 go run . --debug
 go run . --config /path/to/config.toml
@@ -323,8 +320,7 @@ Build and run local binaries:
 
 ```bash
 go build -o tildewire .
-go build -o tw ./cmd/tw
-./tw
+./tildewire
 ```
 
 Install from a local source checkout for daily terminal use:
@@ -333,7 +329,7 @@ Install from a local source checkout for daily terminal use:
 scripts/install-local.sh
 ```
 
-The installer writes `tildewire` to `${TILDEWIRE_BIN_DIR:-$HOME/.local/bin}`. It creates `tw` as a symlink only when no existing `tw` command or target path is found. If `tw` already belongs to another tool, the installer leaves it untouched and prints the existing path.
+The installer writes `tildewire` to `${TILDEWIRE_BIN_DIR:-$HOME/.local/bin}`.
 
 To install somewhere else:
 
@@ -430,14 +426,13 @@ Run the test suite:
 go test ./...
 ```
 
-Build the binaries:
+Build the binary:
 
 ```bash
 go build -o tildewire .
-go build -o tw ./cmd/tw
 ```
 
-Check the non-overwriting local installer:
+Check the local installer:
 
 ```bash
 scripts/install-local.sh /private/tmp/tildewire-install-check
@@ -447,7 +442,6 @@ Check the supported CLI shape:
 
 ```bash
 go run . --help
-go run ./cmd/tw --help
 ```
 
 Regenerate typed SQL after changing `internal/store/queries.sql`, `internal/store/schema.sql`, or `sqlc.yaml`:

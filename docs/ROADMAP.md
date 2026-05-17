@@ -212,4 +212,4 @@ Before v0.4:
 
 ## 10. Naming Decision
 
-Use `tildewire` consistently across the product, repository, canonical binary, configuration paths, release artifacts, and documentation. Also support `tw` as a short daily terminal entrypoint that launches the same TUI and uses the same flags and local file paths. Installers must skip `tw` when another command already owns that name.
+Use `tildewire` consistently across the product, repository, canonical binary, configuration paths, release artifacts, and documentation.

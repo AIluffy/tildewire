@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/AIluffy/tildewire/internal/app"
 	"github.com/AIluffy/tildewire/internal/domain"
@@ -148,15 +149,28 @@ func enabledSourceSetFromConfig(values []string) map[domain.SourceID]bool {
 	return enabled
 }
 
-func (r sourceRow) render(m Model) string {
+func (r sourceRow) render(m Model, width int) string {
 	if r.source == "" {
 		return ""
 	}
-	return sourceLine(m.view == r.source, r.label, m.sourceCount(r.source))
+	return sourceLine(m.view == r.source, r.label, m.sourceCount(r.source), width)
 }
 
-func sourceLine(active bool, label string, count int) string {
-	line := fmt.Sprintf("%-12s %3d", label, count)
+func sourceLine(active bool, label string, count, width int) string {
+	countText := fmt.Sprintf("%d", count)
+	if width <= 0 {
+		return ""
+	}
+	if width <= ansi.StringWidth(countText) {
+		line := clip(countText, width)
+		if active {
+			return activeStyle.Render(line)
+		}
+		return line
+	}
+	label = clip(label, width-ansi.StringWidth(countText)-1)
+	gap := strings.Repeat(" ", max(1, width-ansi.StringWidth(label)-ansi.StringWidth(countText)))
+	line := label + gap + countText
 	if active {
 		return activeStyle.Render(line)
 	}
@@ -208,12 +222,16 @@ func sourceBadge(source domain.SourceID) string {
 	return app.SourceBadge(source)
 }
 
-func renderFeedItemLine(idx int, entry domain.FeedEntry, active bool, width int, search string) string {
+func feedIndexWidth(total int) int {
+	return len(fmt.Sprintf("%d", max(1, total)))
+}
+
+func renderFeedItemLine(idx int, entry domain.FeedEntry, active bool, width int, search string, indexWidth int) string {
 	prefix := "  "
 	if active {
 		prefix = "> "
 	}
-	lead := fmt.Sprintf("%s%d ", prefix, idx+1)
+	lead := fmt.Sprintf("%s%*d ", prefix, max(1, indexWidth), idx+1)
 	tail := entry.Item.Title
 	if flags := stateFlags(entry.State); flags != "" {
 		tail += " " + flags

@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -573,8 +575,59 @@ func TestStoreMigrateIsIdempotent(t *testing.T) {
 	ctx := context.Background()
 	store := openTestStore(t)
 	defer store.Close()
+
+	before := migrationVersionRows(t, store.db)
 	if err := store.Migrate(ctx); err != nil {
 		t.Fatal(err)
+	}
+	after := migrationVersionRows(t, store.db)
+	if after != before {
+		t.Fatalf("migration version rows changed after second migrate: before=%d after=%d", before, after)
+	}
+	latest := latestMigrationVersion(t, store.db)
+	if latest != 5 {
+		t.Fatalf("latest migration version = %d, want 5", latest)
+	}
+}
+
+func TestStoreMigrateAcceptsExistingGooseVersionTable(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "tildewire.db")
+	store, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	schema, err := os.ReadFile("schema.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.db.ExecContext(ctx, string(schema)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.db.ExecContext(ctx, `CREATE TABLE goose_db_version (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		version_id INTEGER NOT NULL,
+		is_applied INTEGER NOT NULL,
+		tstamp TIMESTAMP DEFAULT (datetime('now'))
+	)`); err != nil {
+		t.Fatal(err)
+	}
+	for version := 1; version <= 5; version++ {
+		if _, err := store.db.ExecContext(ctx, `INSERT INTO goose_db_version (version_id, is_applied) VALUES (?, 1)`, version); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := store.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := migrationVersionRows(t, store.db); got != 5 {
+		t.Fatalf("migration version rows = %d, want existing rows only", got)
+	}
+	if got := latestMigrationVersion(t, store.db); got != 5 {
+		t.Fatalf("latest migration version = %d, want 5", got)
 	}
 }
 
@@ -712,6 +765,24 @@ func openTestStore(t *testing.T) *Store {
 		t.Fatal(err)
 	}
 	return store
+}
+
+func migrationVersionRows(t *testing.T, db *sql.DB) int {
+	t.Helper()
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM goose_db_version WHERE is_applied = 1`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	return count
+}
+
+func latestMigrationVersion(t *testing.T, db *sql.DB) int {
+	t.Helper()
+	var version int
+	if err := db.QueryRow(`SELECT COALESCE(MAX(version_id), 0) FROM goose_db_version WHERE is_applied = 1`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	return version
 }
 
 func findStoreStatus(statuses []domain.SourceHealth, source domain.SourceID) domain.SourceStatus {

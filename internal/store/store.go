@@ -3,19 +3,13 @@ package store
 import (
 	"context"
 	"database/sql"
-	"embed"
 
 	_ "modernc.org/sqlite"
 
 	"github.com/AIluffy/tildewire/internal/domain"
 	"github.com/AIluffy/tildewire/internal/httpcache"
 	"github.com/AIluffy/tildewire/internal/store/generated"
-
-	"github.com/pressly/goose/v3"
 )
-
-//go:embed migrations/*.sql
-var migrationFS embed.FS
 
 // Store owns SQLite persistence.
 type Store struct {
@@ -68,14 +62,9 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
-// Migrate applies embedded goose migrations.
+// Migrate applies embedded SQLite migrations.
 func (s *Store) Migrate(ctx context.Context) error {
-	if err := goose.SetDialect("sqlite3"); err != nil {
-		return err
-	}
-	goose.SetBaseFS(migrationFS)
-	defer goose.SetBaseFS(nil)
-	if err := goose.UpContext(ctx, s.db, "migrations"); err != nil {
+	if err := migrateSQLite(ctx, s.db); err != nil {
 		return err
 	}
 	_, err := s.db.ExecContext(ctx, "PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; PRAGMA synchronous=NORMAL;")

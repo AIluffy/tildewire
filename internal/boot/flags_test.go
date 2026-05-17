@@ -9,7 +9,7 @@ import (
 func TestParseArgsForUsesProgramNameInHelp(t *testing.T) {
 	var output bytes.Buffer
 
-	options, err := ParseArgsFor("tw", []string{"--help"}, &output)
+	options, err := ParseArgsFor("tildewire", []string{"--help"}, &output)
 	if err != nil {
 		t.Fatalf("ParseArgsFor returned error: %v", err)
 	}
@@ -19,15 +19,12 @@ func TestParseArgsForUsesProgramNameInHelp(t *testing.T) {
 
 	help := output.String()
 	for _, want := range []string{
-		"tw - terminal daily technical signal radar",
-		"  tw [--config path] [--debug] [--version] [--help]",
+		"tildewire - terminal daily technical signal radar",
+		"  tildewire [--config path] [--debug] [--version] [--help]",
 	} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("help missing %q:\n%s", want, help)
 		}
-	}
-	if strings.Contains(help, "  tildewire [--config path]") {
-		t.Fatalf("short command help should not use canonical usage:\n%s", help)
 	}
 }
 

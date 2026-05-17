@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
 	"time"
 
@@ -21,14 +20,6 @@ import (
 	"github.com/AIluffy/tildewire/internal/store"
 	"github.com/AIluffy/tildewire/internal/tui"
 )
-
-// DisplayName returns the help/usage command name for the current invocation.
-func DisplayName(argv0 string) string {
-	if path.Base(argv0) == "tw" {
-		return "tw"
-	}
-	return "tildewire"
-}
 
 // Run starts tildewire with the provided command-line display name.
 func Run(programName, version string, args []string, output io.Writer) error {

@@ -31,7 +31,7 @@ Primary technical goals:
 | Storage | SQLite | Local cache and durable item state |
 | SQLite driver | `modernc.org/sqlite` | CGo-free release builds |
 | SQL access | `sqlc` | Typed SQL without hiding queries |
-| Migrations | `goose` | Simple SQL migrations |
+| Migrations | Embedded SQLite SQL | Small runtime migrator over versioned SQL files |
 | HTTP retry | `go-retryablehttp` | Bounded retries and backoff |
 | Rate limit | `golang.org/x/time/rate` | Per-source token buckets |
 | HTML parsing | `goquery` | GitHub Trending parser |
@@ -51,15 +51,13 @@ MVP command shape:
 
 ```bash
 tildewire
-tw
 tildewire --config <path>
-tw --config <path>
 tildewire --debug
 tildewire --version
 tildewire --help
 ```
 
-`tildewire` remains the canonical product and binary name. `tw` is a short daily-use entrypoint that runs the same application with the same flags and local file paths. Installers must not overwrite an existing `tw`; create the short entrypoint only when `tw` is not already present.
+`tildewire` remains the canonical product and binary name.
 
 Do not add `fetch`, `list`, `export`, `cache`, or `config` subcommands in v0.1. Keep those actions inside the TUI.
 
@@ -83,7 +81,7 @@ Do not add `fetch`, `list`, `export`, `cache`, or `config` subcommands in v0.1. 
                 │                             │
 ┌───────────────▼──────────────┐ ┌────────────▼──────────┐
 │ Source Layer                  │ │ Store Layer            │
-│ HN, GitHub, HF adapters       │ │ SQLite, sqlc, goose    │
+│ HN, GitHub, HF adapters       │ │ SQLite, sqlc, migrator  │
 └───────────────┬──────────────┘ └────────────┬──────────┘
                 │                             │
 ┌───────────────▼─────────────────────────────▼──────────┐
@@ -137,9 +135,6 @@ tildewire/
   main.go
   go.mod
   go.sum
-  cmd/
-    tw/
-      main.go
   scripts/
     install-local.sh
   docs/
@@ -705,10 +700,9 @@ Build:
 
 ```bash
 go build -o tildewire .
-go build -o tw ./cmd/tw
 ```
 
-Installers and package-manager formulas should install the canonical `tildewire` binary first. They may add `tw` as a symlink or secondary binary only after confirming that `command -v tw` and the target path do not already resolve to another tool.
+Installers and package-manager formulas should install the canonical `tildewire` binary.
 
 Release targets:
 
@@ -720,7 +714,7 @@ Release distribution:
 
 - GoReleaser publishes `tar.gz` archives for macOS and Linux, `zip` archives for Windows, and a `checksums.txt` file.
 - GoReleaser also publishes Linux `.deb`, `.rpm`, and `.apk` packages attached to each GitHub Release.
-- `scripts/install.sh` is the public macOS/Linux installer. It downloads a release archive, verifies the checksum, installs `tildewire`, and creates `tw` only when doing so does not conflict with an existing command.
+- `scripts/install.sh` is the public macOS/Linux installer. It downloads a release archive, verifies the checksum, and installs `tildewire`.
 - `scripts/install-local.sh` remains the local source-checkout installer for development.
 
 Use tag pushes shaped like `v0.1.0` to trigger the release workflow. Package-manager repositories such as Homebrew taps, apt/yum repositories, Scoop, Winget, or Snap should be added only after their backing repository or registry credentials exist.
