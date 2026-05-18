@@ -26,6 +26,7 @@ func SourceCatalog() []SourceCatalogEntry {
 	return []SourceCatalogEntry{
 		{Source: domain.SourceGitHub, Label: "GitHub", ShortLabel: "GH", Badge: "GH"},
 		{Source: domain.SourceHackerNews, Label: "Hacker News", ShortLabel: "HN", Badge: "HN"},
+		{Source: domain.SourceAILabs, Label: "AI Labs", ShortLabel: "AI", Badge: "AI"},
 		{Source: domain.SourceHuggingFace, Label: "HF Papers", ShortLabel: "HF", Badge: "HF"},
 		{Source: domain.SourceLobsters, Label: "Lobsters", ShortLabel: "LOB", Badge: "LB"},
 		{Source: domain.SourceProductHunt, Label: "Product Hunt", ShortLabel: "PH", Badge: "PH"},
@@ -92,6 +93,13 @@ func SourceViews(source domain.SourceID) []SourceView {
 			githubSourceView(domain.FetchScope{Source: source, View: "trending", Period: "daily", Language: "python", Limit: 25}),
 			githubSourceView(domain.FetchScope{Source: source, View: "trending", Period: "daily", Language: "typescript", Limit: 25}),
 		}
+	case domain.SourceAILabs:
+		return []SourceView{
+			{View: "openai", Label: "OpenAI News", Scope: domain.FetchScope{Source: source, View: "openai", Limit: 20}},
+			{View: "anthropic", Label: "Anthropic News", Scope: domain.FetchScope{Source: source, View: "anthropic", Limit: 20}},
+			{View: "deepmind", Label: "Google DeepMind News", Scope: domain.FetchScope{Source: source, View: "deepmind", Limit: 20}},
+			{View: "meta", Label: "Meta AI Blog", Scope: domain.FetchScope{Source: source, View: "meta", Limit: 20}},
+		}
 	case domain.SourceHuggingFace:
 		return []SourceView{
 			{View: "daily", Label: "HF Daily", Scope: domain.FetchScope{Source: source, View: "daily", Limit: 50}},
@@ -120,8 +128,19 @@ func DefaultSourceView(source domain.SourceID) string {
 	return views[0].View
 }
 
+// DefaultFeedSourceView returns the source view automatically applied when entering a source feed.
+func DefaultFeedSourceView(source domain.SourceID) string {
+	if source == domain.SourceAILabs {
+		return ""
+	}
+	return DefaultSourceView(source)
+}
+
 // SourceViewLabel returns the user-facing label for a source view.
 func SourceViewLabel(source domain.SourceID, view string) string {
+	if source == domain.SourceAILabs && strings.TrimSpace(view) == "" {
+		return "All AI Labs"
+	}
 	if source == domain.SourceGitHub {
 		if scope, ok := ScopeForSourceView(source, view); ok {
 			return githubScopeLabel(scope)

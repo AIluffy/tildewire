@@ -6,7 +6,7 @@ Repo guidance for coding agents working on tildewire.
 
 - tildewire is a Go terminal TUI. Keep product workflows inside the TUI, not new CLI subcommands, unless the user explicitly changes CLI scope.
 - Supported command shape: `tildewire [--config path] [--debug] [--version] [--help]`.
-- Current sources are GitHub Trending, Hacker News, Hugging Face Papers, Lobsters, and optional token-gated Product Hunt.
+- Current sources are GitHub Trending, Hacker News, AI Labs, Hugging Face Papers, Lobsters, and optional token-gated Product Hunt.
 - Use `README.md` for current user-facing behavior, and use `docs/PRD.md`, `docs/TECHNICAL_DESIGN.md`, `docs/ROADMAP.md`, and `docs/RELEASE_NOTES.md` as product and architecture references.
 
 ## Boundaries

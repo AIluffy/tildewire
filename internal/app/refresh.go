@@ -209,26 +209,50 @@ func normalizeRefreshMode(mode RefreshMode) RefreshMode {
 func refreshScopes(adapter SourceAdapter, view domain.SourceID, filter FeedFilter, mode RefreshMode) []domain.FetchScope {
 	switch mode {
 	case RefreshModeStartup:
-		return dedupeScopes([]domain.FetchScope{primaryScope(adapter)})
+		return primaryScopes(adapter)
 	case RefreshModeVisible:
 		if view == "" || view == domain.SourceAll {
-			return dedupeScopes([]domain.FetchScope{primaryScope(adapter)})
+			return primaryScopes(adapter)
 		}
 		if view != adapter.Source() {
 			return nil
 		}
-		scopes := []domain.FetchScope{primaryScope(adapter)}
 		sourceView := filter.SourceView
 		if sourceView == "" {
+			if _, ok := explicitPrimaryScopes(adapter); ok {
+				return primaryScopes(adapter)
+			}
 			sourceView = DefaultSourceView(view)
 		}
 		if scope, ok := ScopeForSourceView(view, sourceView); ok {
-			scopes = append(scopes, scope)
+			if _, ok := explicitPrimaryScopes(adapter); ok {
+				return dedupeScopes([]domain.FetchScope{scope})
+			}
+			return dedupeScopes([]domain.FetchScope{primaryScope(adapter), scope})
 		}
-		return dedupeScopes(scopes)
+		return primaryScopes(adapter)
 	default:
 		return adapter.DefaultScopes()
 	}
+}
+
+func primaryScopes(adapter SourceAdapter) []domain.FetchScope {
+	if scopes, ok := explicitPrimaryScopes(adapter); ok {
+		return scopes
+	}
+	return dedupeScopes([]domain.FetchScope{primaryScope(adapter)})
+}
+
+func explicitPrimaryScopes(adapter SourceAdapter) ([]domain.FetchScope, bool) {
+	primaryAdapter, ok := adapter.(PrimaryScopesAdapter)
+	if !ok {
+		return nil, false
+	}
+	scopes := dedupeScopes(primaryAdapter.PrimaryScopes())
+	if len(scopes) == 0 {
+		return nil, false
+	}
+	return scopes, true
 }
 
 func primaryScope(adapter SourceAdapter) domain.FetchScope {

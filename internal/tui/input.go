@@ -90,6 +90,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.switchSource(domain.SourceGitHub)
 	case key.Matches(msg, m.keys.HackerNews):
 		return m.switchSource(domain.SourceHackerNews)
+	case key.Matches(msg, m.keys.AILabs):
+		return m.switchSource(domain.SourceAILabs)
 	case key.Matches(msg, m.keys.HuggingFace):
 		return m.switchSource(domain.SourceHuggingFace)
 	case key.Matches(msg, m.keys.Lobsters):
@@ -210,6 +212,12 @@ func (m Model) handleHealthKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Help):
 		m.help.ShowAll = !m.help.ShowAll
 		return m, nil
+	case key.Matches(msg, m.keys.Refresh):
+		next, cmd := m.startRefresh(true, app.RefreshModeVisible)
+		if cmd != nil && m.lastError != "" {
+			next.message = "retrying failed refresh"
+		}
+		return next, cmd
 	case key.Matches(msg, m.keys.Back):
 		m.health = false
 		return m, nil

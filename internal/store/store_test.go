@@ -560,7 +560,7 @@ func TestStoreInitialMVPSourceStatusesAreEnabled(t *testing.T) {
 	for _, status := range statuses {
 		seen[status.Source] = status.Status
 	}
-	for _, source := range []domain.SourceID{domain.SourceHackerNews, domain.SourceGitHub, domain.SourceHuggingFace, domain.SourceLobsters, domain.SourceProductHunt} {
+	for _, source := range []domain.SourceID{domain.SourceHackerNews, domain.SourceGitHub, domain.SourceAILabs, domain.SourceHuggingFace, domain.SourceLobsters, domain.SourceProductHunt} {
 		got, ok := seen[source]
 		if !ok {
 			t.Fatalf("%s initial status missing", source)
@@ -585,8 +585,8 @@ func TestStoreMigrateIsIdempotent(t *testing.T) {
 		t.Fatalf("migration version rows changed after second migrate: before=%d after=%d", before, after)
 	}
 	latest := latestMigrationVersion(t, store.db)
-	if latest != 5 {
-		t.Fatalf("latest migration version = %d, want 5", latest)
+	if latest != 6 {
+		t.Fatalf("latest migration version = %d, want 6", latest)
 	}
 }
 
@@ -623,11 +623,11 @@ func TestStoreMigrateAcceptsExistingGooseVersionTable(t *testing.T) {
 	if err := store.Migrate(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if got := migrationVersionRows(t, store.db); got != 5 {
-		t.Fatalf("migration version rows = %d, want existing rows only", got)
+	if got := migrationVersionRows(t, store.db); got != 6 {
+		t.Fatalf("migration version rows = %d, want versions 1 through 6", got)
 	}
-	if got := latestMigrationVersion(t, store.db); got != 5 {
-		t.Fatalf("latest migration version = %d, want 5", got)
+	if got := latestMigrationVersion(t, store.db); got != 6 {
+		t.Fatalf("latest migration version = %d, want 6", got)
 	}
 }
 

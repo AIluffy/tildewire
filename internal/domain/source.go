@@ -12,6 +12,8 @@ const (
 	SourceHackerNews SourceID = "hackernews"
 	// SourceGitHub identifies GitHub Trending.
 	SourceGitHub SourceID = "github"
+	// SourceAILabs identifies official AI lab news feeds.
+	SourceAILabs SourceID = "ailabs"
 	// SourceHuggingFace identifies Hugging Face Papers.
 	SourceHuggingFace SourceID = "huggingface"
 	// SourceLobsters identifies Lobsters.

@@ -156,6 +156,7 @@ CREATE INDEX IF NOT EXISTS idx_dedupe_candidates_score ON dedupe_candidates(scor
 INSERT OR IGNORE INTO sources (id, name, status) VALUES
   ('hackernews', 'Hacker News', 'UNKNOWN'),
   ('github', 'GitHub Trending', 'UNKNOWN'),
+  ('ailabs', 'AI Labs', 'UNKNOWN'),
   ('huggingface', 'Hugging Face Papers', 'UNKNOWN'),
   ('lobsters', 'Lobsters', 'UNKNOWN'),
   ('producthunt', 'Product Hunt', 'UNKNOWN');

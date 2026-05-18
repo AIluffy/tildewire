@@ -200,7 +200,7 @@ func TestModelFilterOverlayAppliesSourceScopeAndIndependentFacets(t *testing.T) 
 	}
 
 	for _, key := range []string{
-		"l", "l", "l", "l",
+		"l", "l", "l", "l", "l",
 		"j", "l",
 		"j", "l",
 		"j", "l",

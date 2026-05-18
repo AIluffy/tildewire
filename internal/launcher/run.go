@@ -71,6 +71,7 @@ func Run(programName, version string, args []string, output io.Writer) error {
 		[]app.SourceAdapter{
 			sources.NewGitHubTrendingAdapter(cfg.GitHubToken),
 			sources.NewHackerNewsAdapter(),
+			sources.NewAILabsAdapter(),
 			sources.NewHuggingFacePapersAdapter(),
 			sources.NewLobstersAdapter(),
 			sources.NewProductHuntAdapter(cfg.ProductHuntToken),

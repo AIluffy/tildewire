@@ -235,6 +235,7 @@ func tuiSnapshot(saved bool) app.Snapshot {
 			domain.SourceAll:         2,
 			domain.SourceHackerNews:  2,
 			domain.SourceGitHub:      0,
+			domain.SourceAILabs:      0,
 			domain.SourceHuggingFace: 0,
 			domain.SourceLobsters:    0,
 			domain.SourceProductHunt: 0,

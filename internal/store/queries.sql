@@ -101,7 +101,7 @@ UPDATE item_state SET hidden = ?, hidden_at = ? WHERE item_id = ?;
 -- name: ListSourceStatuses :many
 SELECT id, name, status, last_fetch_at, last_success_at, COALESCE(last_error, '') AS last_error
 FROM sources
-ORDER BY CASE id WHEN 'github' THEN 1 WHEN 'huggingface' THEN 2 WHEN 'lobsters' THEN 3 WHEN 'producthunt' THEN 4 WHEN 'hackernews' THEN 5 ELSE 6 END;
+ORDER BY CASE id WHEN 'github' THEN 1 WHEN 'hackernews' THEN 2 WHEN 'ailabs' THEN 3 WHEN 'huggingface' THEN 4 WHEN 'lobsters' THEN 5 WHEN 'producthunt' THEN 6 ELSE 7 END;
 
 -- name: UpsertSourceStatus :exec
 INSERT INTO sources (id, name, last_fetch_at, last_success_at, last_error, status)

@@ -58,6 +58,7 @@ func TestModelSourceKeysLoadViews(t *testing.T) {
 		{key: "3", view: domain.SourceHuggingFace},
 		{key: "4", view: domain.SourceLobsters},
 		{key: "5", view: domain.SourceProductHunt},
+		{key: "6", view: domain.SourceAILabs},
 	} {
 		updated, cmd := model.Update(keyPress(tt.key))
 		if cmd == nil {
@@ -120,6 +121,10 @@ func TestModelSourceKeysSetDefaultSourceView(t *testing.T) {
 	model = runKeyCommand(t, model, "5")
 	if service.lastFilter.SourceView != "today" {
 		t.Fatalf("product hunt source view = %q, want today", service.lastFilter.SourceView)
+	}
+	model = runKeyCommand(t, model, "6")
+	if service.lastFilter.SourceView != "" {
+		t.Fatalf("AI Labs source view = %q, want aggregate source", service.lastFilter.SourceView)
 	}
 	model = runKeyCommand(t, model, "a")
 	if service.lastFilter.SourceView != "" {
@@ -304,7 +309,7 @@ func TestModelSourcesFocusedSortsAndPersistsOrder(t *testing.T) {
 	if model.view != domain.SourceGitHub {
 		t.Fatalf("view after sort = %s, want %s", model.view, domain.SourceGitHub)
 	}
-	wantOrder := []string{"hackernews", "github", "huggingface", "lobsters", "producthunt"}
+	wantOrder := []string{"hackernews", "github", "huggingface", "lobsters", "producthunt", "ailabs"}
 	if got := model.config.SourceOrder; !slices.Equal(got, wantOrder) {
 		t.Fatalf("model source order = %#v, want %#v", got, wantOrder)
 	}

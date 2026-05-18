@@ -396,6 +396,10 @@ func normalizeSourceOrderValues(values []string) []string {
 }
 
 func defaultEnabledSources() []string {
+	return []string{"github", "hackernews", "ailabs", "huggingface", "lobsters", "producthunt"}
+}
+
+func legacyDefaultEnabledSources() []string {
 	return []string{"github", "hackernews", "huggingface", "lobsters", "producthunt"}
 }
 
@@ -425,5 +429,20 @@ func normalizeEnabledSourceValues(values []string) []string {
 		seen[value] = true
 		normalized = append(normalized, value)
 	}
+	if sameStringSlice(normalized, legacyDefaultEnabledSources()) {
+		return defaultEnabledSources()
+	}
 	return normalized
+}
+
+func sameStringSlice(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for idx := range left {
+		if left[idx] != right[idx] {
+			return false
+		}
+	}
+	return true
 }

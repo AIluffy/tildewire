@@ -638,6 +638,35 @@ func TestRefreshStartupUsesPrimaryScopesOnly(t *testing.T) {
 	assertScopeViews(t, hf.calls, []string{"daily"})
 }
 
+func TestRefreshStartupUsesAdapterPrimaryScopes(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+
+	aiLabs := &fakeAdapter{
+		source: domain.SourceAILabs,
+		scopes: []domain.FetchScope{
+			{Source: domain.SourceAILabs, View: "openai"},
+			{Source: domain.SourceAILabs, View: "anthropic"},
+			{Source: domain.SourceAILabs, View: "deepmind"},
+			{Source: domain.SourceAILabs, View: "meta"},
+		},
+		primaryScopes: []domain.FetchScope{
+			{Source: domain.SourceAILabs, View: "openai"},
+			{Source: domain.SourceAILabs, View: "anthropic"},
+			{Source: domain.SourceAILabs, View: "deepmind"},
+			{Source: domain.SourceAILabs, View: "meta"},
+		},
+	}
+	service := NewService(db, httpx.New(time.Second), []SourceAdapter{aiLabs})
+
+	if _, err := service.Refresh(ctx, domain.SourceAll, FeedFilter{}, RefreshOptions{Mode: RefreshModeStartup}); err != nil {
+		t.Fatal(err)
+	}
+
+	assertScopeViews(t, aiLabs.calls, []string{"openai", "anthropic", "deepmind", "meta"})
+}
+
 func TestRefreshVisibleIncludesCurrentSourceViewWithoutDuplicate(t *testing.T) {
 	ctx := context.Background()
 	db := openAppTestStore(t)
@@ -678,6 +707,60 @@ func TestRefreshVisibleIncludesCurrentSourceViewWithoutDuplicate(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertScopeViews(t, github.calls, []string{"trending:daily", "trending:monthly:c++:spoken:zh"})
+}
+
+func TestRefreshVisibleSpecificMultiPrimarySourceUsesSelectedViewOnly(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+
+	aiLabs := &fakeAdapter{
+		source: domain.SourceAILabs,
+		scopes: []domain.FetchScope{
+			{Source: domain.SourceAILabs, View: "openai"},
+			{Source: domain.SourceAILabs, View: "anthropic"},
+			{Source: domain.SourceAILabs, View: "deepmind"},
+			{Source: domain.SourceAILabs, View: "meta"},
+		},
+		primaryScopes: []domain.FetchScope{
+			{Source: domain.SourceAILabs, View: "openai"},
+			{Source: domain.SourceAILabs, View: "anthropic"},
+			{Source: domain.SourceAILabs, View: "deepmind"},
+			{Source: domain.SourceAILabs, View: "meta"},
+		},
+	}
+	service := NewService(db, httpx.New(time.Second), []SourceAdapter{aiLabs})
+
+	_, err := service.Refresh(ctx, domain.SourceAILabs, FeedFilter{SourceView: "meta"}, RefreshOptions{Mode: RefreshModeVisible})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertScopeViews(t, aiLabs.calls, []string{"meta"})
+}
+
+func TestRefreshVisibleMultiPrimarySourceDefaultsToAllPrimaryScopes(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+
+	aiLabs := &fakeAdapter{
+		source: domain.SourceAILabs,
+		primaryScopes: []domain.FetchScope{
+			{Source: domain.SourceAILabs, View: "openai"},
+			{Source: domain.SourceAILabs, View: "anthropic"},
+			{Source: domain.SourceAILabs, View: "deepmind"},
+			{Source: domain.SourceAILabs, View: "meta"},
+		},
+	}
+	service := NewService(db, httpx.New(time.Second), []SourceAdapter{aiLabs})
+
+	_, err := service.Refresh(ctx, domain.SourceAILabs, FeedFilter{}, RefreshOptions{Mode: RefreshModeVisible})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertScopeViews(t, aiLabs.calls, []string{"openai", "anthropic", "deepmind", "meta"})
 }
 
 func TestRefreshVisibleAllViewRefreshesPrimaryScopes(t *testing.T) {
@@ -926,6 +1009,61 @@ func TestLoadFeedIncludesGitHubAndSourceCounts(t *testing.T) {
 	}
 	if githubWeeklySnapshot.Counts[domain.SourceAll] != githubWeeklySnapshot.Counts[domain.SourceGitHub]+githubWeeklySnapshot.Counts[domain.SourceHackerNews]+githubWeeklySnapshot.Counts[domain.SourceHuggingFace] {
 		t.Fatalf("all count should track active source scope count: %+v", githubWeeklySnapshot.Counts)
+	}
+}
+
+func TestLoadFeedCountsMultiPrimarySourceViews(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+	now := time.Date(2026, 5, 10, 10, 0, 0, 0, time.UTC)
+	openAI := appTestSourceItem("ai-openai", "url:https://openai.com/news/one", "OpenAI one", domain.SourceAILabs, 1, now)
+	openAI.Sources[0].SourceView = "openai"
+	meta := appTestSourceItem("ai-meta", "url:https://ai.meta.com/blog/one", "Meta one", domain.SourceAILabs, 1, now.Add(time.Minute))
+	meta.Sources[0].SourceView = "meta"
+	if err := db.UpsertFeedItems(ctx, []domain.FeedItem{openAI, meta}); err != nil {
+		t.Fatal(err)
+	}
+	aiLabs := &fakeAdapter{
+		source: domain.SourceAILabs,
+		primaryScopes: []domain.FetchScope{
+			{Source: domain.SourceAILabs, View: "openai"},
+			{Source: domain.SourceAILabs, View: "anthropic"},
+			{Source: domain.SourceAILabs, View: "deepmind"},
+			{Source: domain.SourceAILabs, View: "meta"},
+		},
+	}
+	service := NewService(db, httpx.New(time.Second), []SourceAdapter{aiLabs})
+
+	snapshot, err := service.LoadFeed(ctx, domain.SourceAll, FeedFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Counts[domain.SourceAILabs] != 2 || snapshot.Counts[domain.SourceAll] != 2 {
+		t.Fatalf("counts = %+v, want AI Labs and All to count both provider items", snapshot.Counts)
+	}
+}
+
+func TestLoadFeedMultiPrimarySourceDefaultsToAllViews(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+	now := time.Date(2026, 5, 10, 10, 0, 0, 0, time.UTC)
+	openAI := appTestSourceItem("ai-openai", "url:https://openai.com/news/one", "OpenAI one", domain.SourceAILabs, 1, now)
+	openAI.Sources[0].SourceView = "openai"
+	meta := appTestSourceItem("ai-meta", "url:https://ai.meta.com/blog/one", "Meta one", domain.SourceAILabs, 1, now.Add(time.Minute))
+	meta.Sources[0].SourceView = "meta"
+	if err := db.UpsertFeedItems(ctx, []domain.FeedItem{openAI, meta}); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(db, httpx.New(time.Second), []SourceAdapter{&fakeAdapter{source: domain.SourceAILabs}})
+
+	snapshot, err := service.LoadFeed(ctx, domain.SourceAILabs, FeedFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Entries) != 2 || snapshot.Filter.SourceView != "" {
+		t.Fatalf("AI Labs default feed = entries:%d filter:%+v, want all provider entries with empty source view", len(snapshot.Entries), snapshot.Filter)
 	}
 }
 
@@ -1214,6 +1352,7 @@ type fakeAdapter struct {
 	token         string
 	startSignal   chan<- domain.SourceID
 	releaseFetch  <-chan struct{}
+	primaryScopes []domain.FetchScope
 }
 
 func (f *fakeAdapter) Source() domain.SourceID {
@@ -1228,6 +1367,10 @@ func (f *fakeAdapter) DefaultScopes() []domain.FetchScope {
 		return f.scopes
 	}
 	return []domain.FetchScope{{Source: domain.SourceHackerNews, View: "top", Limit: 10}}
+}
+
+func (f *fakeAdapter) PrimaryScopes() []domain.FetchScope {
+	return f.primaryScopes
 }
 
 func (f *fakeAdapter) Fetch(ctx context.Context, scope domain.FetchScope, _ httpx.Requester) (*domain.FetchResult, error) {

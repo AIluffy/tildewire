@@ -31,14 +31,37 @@ func (s *Service) sourceTabCounts(ctx context.Context) (map[domain.SourceID]int,
 		counts[source] = storedCounts[source]
 	}
 	for _, source := range s.sources {
-		sourceView := DefaultSourceView(source)
-		if sourceView == "" {
+		viewKeys := s.primarySourceViewKeys(source)
+		if len(viewKeys) == 0 {
 			continue
 		}
-		counts[source] = sourceViewCounts[source][sourceView]
+		total := 0
+		for _, viewKey := range viewKeys {
+			total += sourceViewCounts[source][viewKey]
+		}
+		counts[source] = total
 	}
 	counts[domain.SourceAll] = sumSourceCounts(counts, s.sources)
 	return counts, nil
+}
+
+func (s *Service) primarySourceViewKeys(source domain.SourceID) []string {
+	for _, adapter := range s.adapters {
+		if adapter.Source() != source {
+			continue
+		}
+		scopes := primaryScopes(adapter)
+		keys := make([]string, 0, len(scopes))
+		for _, scope := range scopes {
+			keys = append(keys, sourceViewKey(scope))
+		}
+		return keys
+	}
+	sourceView := DefaultSourceView(source)
+	if sourceView == "" {
+		return nil
+	}
+	return []string{sourceView}
 }
 
 func activePersonalizationRules(rules []domain.PersonalizationRule) []domain.PersonalizationRule {
@@ -179,13 +202,13 @@ func normalizeFilter(filter FeedFilter) FeedFilter {
 func normalizeViewFilter(view domain.SourceID, filter FeedFilter) FeedFilter {
 	filter = normalizeFilter(filter)
 	if view != "" && view != domain.SourceAll && filter.SourceView == "" {
-		filter.SourceView = DefaultSourceView(view)
+		filter.SourceView = DefaultFeedSourceView(view)
 	}
 	return filter
 }
 
 func orderedAdapters(adapters []SourceAdapter) []SourceAdapter {
-	order := []domain.SourceID{domain.SourceGitHub, domain.SourceHuggingFace, domain.SourceLobsters, domain.SourceProductHunt, domain.SourceHackerNews}
+	order := []domain.SourceID{domain.SourceGitHub, domain.SourceAILabs, domain.SourceHuggingFace, domain.SourceLobsters, domain.SourceProductHunt, domain.SourceHackerNews}
 	bySource := make(map[domain.SourceID]SourceAdapter, len(adapters))
 	for _, adapter := range adapters {
 		bySource[adapter.Source()] = adapter

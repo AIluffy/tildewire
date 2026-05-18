@@ -87,6 +87,7 @@ func themeStylesFor(value string) themeStyles {
 		sources: map[domain.SourceID]lipgloss.Style{
 			domain.SourceGitHub:      lipgloss.NewStyle().Foreground(lipgloss.Color(spec.github)).Bold(true),
 			domain.SourceHackerNews:  lipgloss.NewStyle().Foreground(lipgloss.Color(spec.hackerNews)).Bold(true),
+			domain.SourceAILabs:      lipgloss.NewStyle().Foreground(lipgloss.Color(spec.accent)).Bold(true),
 			domain.SourceHuggingFace: lipgloss.NewStyle().Foreground(lipgloss.Color(spec.huggingFace)).Bold(true),
 			domain.SourceLobsters:    lipgloss.NewStyle().Foreground(lipgloss.Color(spec.lobsters)).Bold(true),
 			domain.SourceProductHunt: lipgloss.NewStyle().Foreground(lipgloss.Color(spec.productHunt)).Bold(true),

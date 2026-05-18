@@ -112,7 +112,7 @@ func TestModelRenderSourcesSpreadsCountsToRightEdge(t *testing.T) {
 	snapshot.Counts[domain.SourceProductHunt] = 12
 	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
 
-	rendered := ansi.Strip(model.renderSources(28, 8))
+	rendered := ansi.Strip(model.renderSources(28, 9))
 	for _, line := range strings.Split(rendered, "\n") {
 		if !strings.Contains(line, "Product Hunt") {
 			continue

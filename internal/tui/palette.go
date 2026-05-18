@@ -196,6 +196,8 @@ func sourceKeywords(source domain.SourceID) string {
 		return "github trending source"
 	case domain.SourceHackerNews:
 		return "hacker news hn source"
+	case domain.SourceAILabs:
+		return "ai labs openai anthropic deepmind meta source"
 	case domain.SourceHuggingFace:
 		return "hugging face hf papers source"
 	case domain.SourceLobsters:

@@ -1,8 +1,8 @@
 # tildewire Release Notes
 
-## v0.3 draft
+## v0.3.0
 
-v0.3 completes the personalization and observability slice for repeat users who want less noise and clearer source health.
+v0.3.0 completes the personalization and observability slice for repeat users who want less noise, clearer source health, and first-class AI lab news in the daily radar.
 
 ### Added
 
@@ -12,10 +12,13 @@ v0.3 completes the personalization and observability slice for repeat users who 
 - A TUI rule form for adding and editing personalization rules, plus palette shortcuts for quick rules from the current item or search.
 - Saved/hidden preference signals that adjust All-view ranking while preserving source-native ranking in single-source views.
 - SimHash-assisted dedupe candidates with debug details and non-destructive ignore decisions.
+- AI Labs source aggregating OpenAI News, Anthropic News, Google DeepMind News, and Meta AI Blog.
+- Source Health retry via `r` after refresh failures, with forced visible-scope refresh.
 
 ### Notes
 
 - Dedupe candidates are suggestions only; tildewire does not silently merge or delete source context.
+- AI Labs defaults to the aggregate source feed; press `v` to narrow it to a single lab scope.
 - No new CLI subcommands were added; personalization and dedupe workflows stay inside the TUI.
 
 ## v0.2 draft

@@ -165,6 +165,8 @@ func (m Model) renderHeader() string {
 		view = "Trending"
 	case domain.SourceHackerNews:
 		view = "Hacker News"
+	case domain.SourceAILabs:
+		view = "AI Labs"
 	case domain.SourceHuggingFace:
 		view = "HF Papers"
 	case domain.SourceLobsters:

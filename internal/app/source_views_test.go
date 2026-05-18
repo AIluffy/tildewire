@@ -147,6 +147,32 @@ func TestSourceCatalogIncludesProductHuntViews(t *testing.T) {
 	}
 }
 
+func TestSourceCatalogIncludesAILabsViews(t *testing.T) {
+	if SourceLabel(domain.SourceAILabs) != "AI Labs" || SourceBadge(domain.SourceAILabs) != "AI" {
+		t.Fatalf("AI Labs labels = %q/%q", SourceLabel(domain.SourceAILabs), SourceBadge(domain.SourceAILabs))
+	}
+	scopes := SourceViews(domain.SourceAILabs)
+	got := make(map[string]bool)
+	for _, scope := range scopes {
+		got[scope.View] = true
+		if scope.Scope.Source != domain.SourceAILabs || scope.Scope.Limit <= 0 {
+			t.Fatalf("invalid AI Labs scope: %+v", scope)
+		}
+	}
+	for _, view := range []string{"openai", "anthropic", "deepmind", "meta"} {
+		if !got[view] {
+			t.Fatalf("missing AI Labs view %q in %+v", view, scopes)
+		}
+	}
+	if DefaultSourceView(domain.SourceAILabs) != "openai" {
+		t.Fatalf("default AI Labs view = %q, want openai", DefaultSourceView(domain.SourceAILabs))
+	}
+	label := SourceViewLabel(domain.SourceAILabs, "deepmind")
+	if !strings.Contains(label, "DeepMind") {
+		t.Fatalf("AI Labs DeepMind label = %q, want DeepMind", label)
+	}
+}
+
 func hasGitHubScopeOption(options []GitHubScopeOption, want GitHubScopeOption) bool {
 	for _, option := range options {
 		if option == want {

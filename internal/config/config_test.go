@@ -111,6 +111,22 @@ func TestLoadAndSaveEnabledSources(t *testing.T) {
 	}
 }
 
+func TestLoadUpgradesLegacyDefaultEnabledSources(t *testing.T) {
+	setupHome(t)
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte("enabled_sources = [\"github\", \"hackernews\", \"huggingface\", \"lobsters\", \"producthunt\"]\nsource_order = [\"github\", \"hackernews\", \"huggingface\", \"lobsters\", \"producthunt\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(Options{ConfigPath: path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.EnabledSources; !slices.Equal(got, defaultEnabledSources()) {
+		t.Fatalf("enabled sources = %#v, want upgraded defaults %#v", got, defaultEnabledSources())
+	}
+}
+
 func TestLoadEnvOverridesConfigAndCLIOverridesEnv(t *testing.T) {
 	setupHome(t)
 	path := filepath.Join(t.TempDir(), "config.toml")

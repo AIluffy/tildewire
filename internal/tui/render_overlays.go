@@ -129,7 +129,7 @@ func (m Model) renderHealth() string {
 		lines = append(lines, "  finished: "+timeLabel(&event.FinishedAt))
 		lines = append(lines, "")
 	}
-	lines = append(lines, m.styles.muted.Render("esc back  ? help  q quit"))
+	lines = append(lines, m.styles.muted.Render("r retry  esc back  ? help  q quit"))
 	if m.help.ShowAll {
 		lines = append(lines, "", m.help.View(m.keys))
 	}

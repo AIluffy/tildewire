@@ -170,7 +170,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.message = msg.message
 		if msg.err != nil {
 			m.lastError = msg.err.Error()
-			m.message = "using cached data after refresh error"
+			m.message = "using cached data; press r to retry"
 		}
 		if msg.nextRefresh != nil {
 			m.refreshing = true

@@ -224,7 +224,7 @@ func (m Model) filterSourceLabel(source domain.SourceID) string {
 }
 
 func defaultSourceView(source domain.SourceID) string {
-	return app.DefaultSourceView(source)
+	return app.DefaultFeedSourceView(source)
 }
 
 func nextSourceView(source domain.SourceID, current string) (string, bool) {

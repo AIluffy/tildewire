@@ -36,6 +36,35 @@ func TestModelRefreshErrorKeepsCachedItems(t *testing.T) {
 	}
 }
 
+func TestModelHealthRetryStartsForcedVisibleRefresh(t *testing.T) {
+	service := &fakeService{snapshot: tuiSnapshot(false)}
+	model := NewModel(service, tuiSnapshot(false))
+	model.refreshing = false
+	model.health = true
+	model.lastError = "network down"
+
+	updated, cmd := model.Update(keyPress("r"))
+	if cmd == nil {
+		t.Fatal("expected retry command from source health")
+	}
+	model = updated.(Model)
+	if !model.refreshing {
+		t.Fatal("model should be refreshing during retry")
+	}
+
+	updated, _ = model.Update(firstBatchCommandMsg(t, cmd))
+	model = updated.(Model)
+	if !service.lastForce {
+		t.Fatal("health retry should force network refresh")
+	}
+	if service.lastRefreshMode != app.RefreshModeVisible {
+		t.Fatalf("retry refresh mode = %s, want %s", service.lastRefreshMode, app.RefreshModeVisible)
+	}
+	if model.lastError != "" {
+		t.Fatalf("lastError = %q, want cleared after successful retry", model.lastError)
+	}
+}
+
 func TestModelRefreshStartsProgressPolling(t *testing.T) {
 	service := &fakeService{snapshot: tuiSnapshot(false)}
 	model := NewModel(service, tuiSnapshot(false))

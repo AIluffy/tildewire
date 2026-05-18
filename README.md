@@ -2,7 +2,7 @@
 
 Terminal daily technical signal radar for developers.
 
-tildewire is a local-first terminal TUI for scanning high-signal developer content. It pulls Hacker News, GitHub Trending, Hugging Face Papers, Lobsters, and optional Product Hunt into one keyboard-first interface with cached startup, background refresh progress, local state, source health, search, filtering, personalization, Markdown-rich detail views, and saved-item export.
+tildewire is a local-first terminal TUI for scanning high-signal developer content. It pulls Hacker News, GitHub Trending, AI Labs news, Hugging Face Papers, Lobsters, and optional Product Hunt into one keyboard-first interface with cached startup, background refresh progress, local state, source health, search, filtering, personalization, Markdown-rich detail views, and saved-item export.
 
 The product is intentionally TUI-first. The supported command shape stays small:
 
@@ -37,7 +37,7 @@ curl -fsSL https://raw.githubusercontent.com/AIluffy/tildewire/main/scripts/inst
 Install a specific release:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AIluffy/tildewire/main/scripts/install.sh | TILDEWIRE_VERSION=v0.1.0 sh
+curl -fsSL https://raw.githubusercontent.com/AIluffy/tildewire/main/scripts/install.sh | TILDEWIRE_VERSION=v0.3.0 sh
 ```
 
 The installer downloads the matching release archive, verifies it against `checksums.txt`, and installs `tildewire` to `${TILDEWIRE_BIN_DIR:-$HOME/.local/bin}`.
@@ -87,7 +87,7 @@ go build -o tildewire .
 1. Start tildewire with `go run .` during development, or `tildewire` after building/installing.
 2. Cached feed data appears first so the TUI is useful before network refresh completes.
 3. Background refresh updates enabled sources and source health without blocking the UI.
-4. Use the Sources panel or number shortcuts to choose All, GitHub, Hacker News, Hugging Face Papers, Lobsters, or Product Hunt.
+4. Use the Sources panel or number shortcuts to choose All, GitHub, Hacker News, AI Labs, Hugging Face Papers, Lobsters, or Product Hunt.
 5. Scan the Feed panel and use Preview+ to triage the selected item with source badges, ranks, source-native metrics, summary text, content cues, and links.
 6. Press `Enter` when an item needs deeper context. Detail loading is lazy and asynchronous.
 7. Save useful items with `s`, mark read/unread with `m` or `u`, hide noise with `h`, open URLs with `o` or `O`, and copy links with `y` or `Y`.
@@ -100,6 +100,7 @@ go build -o tildewire .
 |---|---|---|---|
 | GitHub Trending | Today, this week, this month, and common daily language scopes such as Go, Rust, Python, and TypeScript. GitHub scope parsing also supports programming language and spoken language filters. | Optional `github_token` or `GITHUB_TOKEN` helps with README preview rate limits. | README preview rendered in the detail view, including tables, visual dividers, code-block copy, and optional terminal image previews. |
 | Hacker News | Top, Best, New, Show HN. | None. | Top-level comments in the detail view. |
+| AI Labs | OpenAI News, Anthropic News, Google DeepMind News, Meta AI Blog. | None. | Feed display only; source URLs open the official lab post. |
 | Hugging Face Papers | Daily papers. | None. | Paper metadata and paper-related sections when available. |
 | Lobsters | Hottest, Newest. | None. | Top-level comments in the detail view. |
 | Product Hunt | Today, Weekly. | Required for refresh through `product_hunt_token` or `PRODUCT_HUNT_TOKEN`. | Feed display only; source URLs preserve Product Hunt attribution. |
@@ -189,7 +190,7 @@ Palette actions include:
 
 ### Source Health
 
-Press `!` to open Source Health. It shows current status for enabled sources and recent fetch history, including source view, status, duration, item count, stale reason, errors, and timestamps.
+Press `!` to open Source Health. It shows current status for enabled sources and recent fetch history, including source view, status, duration, item count, stale reason, errors, and timestamps. Press `r` from this panel to retry a failed refresh.
 
 Statuses include `UNKNOWN`, `OK`, `STALE`, `REFRESHING`, `RATE_LIMITED`, `AUTH_REQUIRED`, `PARSER_BROKEN`, `NETWORK_ERROR`, and `DISABLED`.
 
@@ -276,6 +277,7 @@ The Clear cache palette action clears refreshable cache data, source status stat
 | `3` | Hugging Face Papers |
 | `4` | Lobsters |
 | `5` | Product Hunt |
+| `6` | AI Labs |
 | `v` | Cycle source scope for the active source |
 | `/` | Search |
 | `f` | Filter |
@@ -394,10 +396,10 @@ accessible_forms = false
 debug = false
 
 # Choose which Sources panel entries and refresh adapters are enabled.
-enabled_sources = ["github", "hackernews", "huggingface", "lobsters", "producthunt"]
+enabled_sources = ["github", "hackernews", "ailabs", "huggingface", "lobsters", "producthunt"]
 
 # Reorder the Sources panel.
-source_order = ["github", "hackernews", "huggingface", "lobsters", "producthunt"]
+source_order = ["github", "hackernews", "ailabs", "huggingface", "lobsters", "producthunt"]
 
 # Optional tokens. Environment variables with the same purpose override these.
 github_token = ""

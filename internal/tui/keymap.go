@@ -17,6 +17,7 @@ type keyMap struct {
 	All          key.Binding
 	GitHub       key.Binding
 	HackerNews   key.Binding
+	AILabs       key.Binding
 	HuggingFace  key.Binding
 	Lobsters     key.Binding
 	ProductHunt  key.Binding
@@ -57,6 +58,7 @@ func defaultKeyMap() keyMap {
 		HuggingFace:  key.NewBinding(key.WithKeys("3"), key.WithHelp("3", "hf")),
 		Lobsters:     key.NewBinding(key.WithKeys("4"), key.WithHelp("4", "lobsters")),
 		ProductHunt:  key.NewBinding(key.WithKeys("5"), key.WithHelp("5", "product hunt")),
+		AILabs:       key.NewBinding(key.WithKeys("6"), key.WithHelp("6", "ai labs")),
 		Scope:        key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "scope")),
 		Search:       key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
 		Filter:       key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "filter")),
@@ -83,7 +85,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.FocusLeft, k.FocusRight, k.Up, k.Down, k.SourceUp, k.SourceDown, k.PreviewUp, k.PreviewDown, k.OpenDetail, k.Back},
-		{k.All, k.GitHub, k.HackerNews, k.HuggingFace, k.Lobsters, k.ProductHunt, k.Scope, k.Search, k.Filter, k.Palette, k.Settings, k.Refresh},
+		{k.All, k.GitHub, k.HackerNews, k.AILabs, k.HuggingFace, k.Lobsters, k.ProductHunt, k.Scope, k.Search, k.Filter, k.Palette, k.Settings, k.Refresh},
 		{k.Save, k.MarkRead, k.MarkUnread, k.Hide},
 		{k.OpenURL, k.OpenSource, k.CopyURL, k.CopyMarkdown, k.Health, k.Quit},
 	}

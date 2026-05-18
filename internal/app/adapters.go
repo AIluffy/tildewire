@@ -16,6 +16,11 @@ type SourceAdapter interface {
 	CachePolicy(domain.FetchScope) domain.CachePolicy
 }
 
+// PrimaryScopesAdapter can expose several scopes that together represent the source's default feed.
+type PrimaryScopesAdapter interface {
+	PrimaryScopes() []domain.FetchScope
+}
+
 // OptionalAuthAdapter reports whether an optional source is unavailable until credentials are configured.
 type OptionalAuthAdapter interface {
 	AuthRequired() (bool, string)

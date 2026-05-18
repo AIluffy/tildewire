@@ -124,6 +124,8 @@ func sourceName(source domain.SourceID) string {
 		return "Hacker News"
 	case domain.SourceGitHub:
 		return "GitHub Trending"
+	case domain.SourceAILabs:
+		return "AI Labs"
 	case domain.SourceHuggingFace:
 		return "Hugging Face Papers"
 	case domain.SourceLobsters:
