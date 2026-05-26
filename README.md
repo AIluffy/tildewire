@@ -165,9 +165,9 @@ Press `f` to open the filter modal. It can adjust:
 - Unread-only.
 - Language.
 - Tag.
-- Include hidden items.
+- Show hidden items alongside the normal feed.
 
-The language and tag options are drawn from current feed data, with common developer language values included. Saved and unread filters can be combined.
+The language and tag options are drawn from current feed data, with common developer language values included. Saved and unread filters can be combined. To recover hidden items, enable Show hidden items, select a hidden row, then press `h` or run the Restore item palette action.
 
 ### Command Palette
 
@@ -178,10 +178,11 @@ Palette actions include:
 - Export saved Markdown, JSON, or CSV.
 - Refresh sources.
 - Clear cache.
+- Show hidden items in the current feed.
 - Open or copy the selected item URL.
 - Save or unsave the selected item.
 - Mark the selected item read.
-- Hide or restore the selected item.
+- Hide the selected item, or restore it when the selected item is hidden.
 - Create boost, mute, or hide rules from the current item or current search.
 - Open Personalization Rules.
 - Open Dedupe Candidates.
@@ -237,7 +238,7 @@ Fuzzy dedupe candidates are generated from item similarity and shown in the Dedu
 | Save or unsave | `s` | Saved state persists across restarts and is included in exports. |
 | Mark read | `m` | Read state persists locally. |
 | Mark unread | `u` | Useful when revisiting cached items. |
-| Hide or restore | `h` | Hidden items leave the normal feed unless filters include hidden items. |
+| Hide or restore | `h` | Hidden items leave the normal feed. Use Show hidden items, then select a hidden item and press `h` to restore it. |
 | Open item URL | `o` | Opens the primary item URL in the system browser. |
 | Open source URL | `O` | Opens the source discussion or source-native URL when available. |
 | Copy URL | `y` | Copies the primary item URL. |
@@ -287,7 +288,7 @@ The Clear cache palette action clears refreshable cache data, source status stat
 | `s` | Save or unsave |
 | `m` | Mark read |
 | `u` | Mark unread |
-| `h` | Hide or restore |
+| `h` | Hide item or restore selected hidden item |
 | `o` | Open item URL |
 | `O` | Open source URL |
 | `y` | Copy URL |
@@ -422,7 +423,7 @@ Product Hunt refresh requires `product_hunt_token` in `config.toml`, the Setting
 | GitHub README preview hits 403 or 429 | Configure `github_token` or `GITHUB_TOKEN`. |
 | Feed says there are no cached items | Press `r` to refresh, check network access, then inspect `!` Source Health. |
 | A source is stale or rate limited | Source Health shows the status, last success, stale reason, and recent fetch errors. Cached data remains available. |
-| Search or filters hide too much | Open `f`, clear saved/unread/language/tag/hidden facets, or return to All view with `a`. |
+| Search or filters hide too much | Open `f`, clear saved/unread/language/tag/show-hidden facets, or return to All view with `a`. |
 | Need a fresh cache | Use `p`, run Clear cache, and wait for the automatic visible-scope refresh. Saved items are preserved. |
 | Need debug logs | Start with `--debug` or set `TILDEWIRE_DEBUG=true`; logs are written under the local state directory. |
 

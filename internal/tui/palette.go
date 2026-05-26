@@ -71,6 +71,10 @@ func (m Model) handlePaletteKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) paletteCommands() []paletteCommand {
+	hiddenActionLabel := "Hide item"
+	if entry, ok := m.selected(); ok && entry.State.Hidden {
+		hiddenActionLabel = "Restore item"
+	}
 	commands := []paletteCommand{
 		{label: "Export saved Markdown", keywords: "export saved markdown md", run: func(m Model) (Model, tea.Cmd) {
 			return m, m.exportSavedCmd(app.ExportMarkdown)
@@ -86,6 +90,11 @@ func (m Model) paletteCommands() []paletteCommand {
 		}},
 		{label: "Clear cache", keywords: "clear cache purge reset cached data", run: func(m Model) (Model, tea.Cmd) {
 			return m, m.clearCacheCmd()
+		}},
+		{label: "Show hidden items", keywords: "show hidden include hidden restore unhide all items", run: func(m Model) (Model, tea.Cmd) {
+			m.filter.IncludeHidden = true
+			m.message = "showing hidden items"
+			return m, m.loadWithMessageCmd(m.message)
 		}},
 		{label: "Open item URL", keywords: "open item url", run: func(m Model) (Model, tea.Cmd) {
 			entry, ok := m.selected()
@@ -115,7 +124,7 @@ func (m Model) paletteCommands() []paletteCommand {
 			}
 			return m, m.setReadCmd(entry.Item.ID, true)
 		}},
-		{label: "Hide or restore item", keywords: "hide restore item", run: func(m Model) (Model, tea.Cmd) {
+		{label: hiddenActionLabel, keywords: "hide restore item unhide", run: func(m Model) (Model, tea.Cmd) {
 			entry, ok := m.selected()
 			if !ok {
 				return m, nil

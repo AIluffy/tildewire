@@ -48,6 +48,15 @@ func (m Model) loadCmd() tea.Cmd {
 	}
 }
 
+func (m Model) loadWithMessageCmd(message string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		snapshot, err := m.service.LoadFeed(ctx, m.view, m.filter)
+		return snapshotMsg{snapshot: snapshot, err: err, message: message}
+	}
+}
+
 func (m Model) searchLoadCmd(searchLoadID int, message string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

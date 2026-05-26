@@ -66,7 +66,7 @@ func (m Model) renderFilter() string {
 		m.filterRow(m.filterCursor == filterFieldUnread, "Unread", boolLabel(draft.UnreadOnly)),
 		m.filterRow(m.filterCursor == filterFieldLanguage, "Language", emptyAsAll(draft.Language)),
 		m.filterRow(m.filterCursor == filterFieldTag, "Tag", emptyAsAll(draft.Tag)),
-		m.filterRow(m.filterCursor == filterFieldHidden, "Hidden", boolLabel(draft.IncludeHidden)),
+		m.filterRow(m.filterCursor == filterFieldHidden, "Show hidden items", boolLabel(draft.IncludeHidden)),
 		"",
 		m.styles.muted.Render("j/k move  l/space change  type tag  c clear facets  enter apply  esc cancel"),
 	}

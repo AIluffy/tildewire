@@ -193,7 +193,7 @@ func TestModelFilterOverlayAppliesSourceScopeAndIndependentFacets(t *testing.T) 
 		t.Fatal("opening filter overlay should not load feed")
 	}
 	rendered := ansi.Strip(model.render())
-	for _, want := range []string{"Source", "Scope", "Saved", "Unread"} {
+	for _, want := range []string{"Source", "Scope", "Saved", "Unread", "Show hidden items"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("filter overlay missing %q:\n%s", want, rendered)
 		}
@@ -417,5 +417,75 @@ func TestModelPaletteFiltersAndExecutesClearCache(t *testing.T) {
 	}
 	if service.lastRefreshMode != app.RefreshModeVisible {
 		t.Fatalf("refresh mode = %s, want visible", service.lastRefreshMode)
+	}
+}
+
+func TestModelPaletteShowHiddenItemsEnablesHiddenFilter(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	service := &fakeService{snapshot: snapshot}
+	model := NewModel(service, snapshot)
+	model.filter = app.FeedFilter{SavedOnly: true, Search: "sqlite"}
+
+	model, cmd := updateModelWithKey(t, model, "p")
+	if cmd != nil {
+		t.Fatal("opening palette should not run command")
+	}
+	for _, key := range []string{"s", "h", "o", "w", " ", "h", "i", "d", "d", "e", "n"} {
+		model, cmd = updateModelWithKey(t, model, key)
+		if cmd != nil {
+			t.Fatalf("typing %q should not run command", key)
+		}
+	}
+	if rendered := ansi.Strip(model.render()); !strings.Contains(rendered, "Show hidden items") {
+		t.Fatalf("palette did not filter to show hidden command:\n%s", rendered)
+	}
+
+	model, cmd = updateModelWithKey(t, model, "enter")
+	if cmd == nil {
+		t.Fatal("expected show hidden command")
+	}
+	model = runOptionalCmd(t, model, cmd)
+
+	if !service.lastFilter.IncludeHidden {
+		t.Fatalf("filter = %+v, want include hidden", service.lastFilter)
+	}
+	if !service.lastFilter.SavedOnly || service.lastFilter.Search != "sqlite" {
+		t.Fatalf("filter = %+v, want existing facets preserved", service.lastFilter)
+	}
+	if !model.filter.IncludeHidden {
+		t.Fatalf("model filter = %+v, want include hidden", model.filter)
+	}
+	if !strings.Contains(model.message, "showing hidden items") {
+		t.Fatalf("message = %q, want showing hidden items", model.message)
+	}
+}
+
+func TestModelPaletteLabelsSelectedHiddenAction(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+
+	model, cmd := updateModelWithKey(t, model, "p")
+	if cmd != nil {
+		t.Fatal("opening palette should not run command")
+	}
+	rendered := ansi.Strip(model.render())
+	if !strings.Contains(rendered, "Hide item") {
+		t.Fatalf("palette should label visible item action as hide:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "Hide or restore item") {
+		t.Fatalf("palette should not show ambiguous hide label:\n%s", rendered)
+	}
+
+	snapshot = tuiSnapshot(false)
+	snapshot.Filter.IncludeHidden = true
+	snapshot.Entries[0].State.Hidden = true
+	model = NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model, cmd = updateModelWithKey(t, model, "p")
+	if cmd != nil {
+		t.Fatal("opening palette should not run command")
+	}
+	rendered = ansi.Strip(model.render())
+	if !strings.Contains(rendered, "Restore item") {
+		t.Fatalf("palette should label hidden item action as restore:\n%s", rendered)
 	}
 }
