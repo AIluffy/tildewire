@@ -110,7 +110,7 @@ func (s *Service) refreshAdapter(ctx context.Context, adapter SourceAdapter, sco
 			errs = append(errs, fmt.Errorf("%s normalize %s: %w", source, scope.View, err))
 			continue
 		}
-		if err := s.upsertFeedItems(ctx, items); err != nil {
+		if err := s.replaceSourceViewFeedItems(ctx, source, sourceViewKey(scope), items); err != nil {
 			_ = s.updateSourceStatus(ctx, source, domain.SourceStatusStale, err.Error())
 			if recordErr := s.recordFetchEvent(ctx, source, scope, domain.SourceStatusStale, startedAt, 0, false, "", err.Error()); recordErr != nil {
 				errs = append(errs, recordErr)
@@ -155,10 +155,10 @@ func (s *Service) updateSourceStatus(ctx context.Context, source domain.SourceID
 	return s.store.UpdateSourceStatus(ctx, source, status, lastErr)
 }
 
-func (s *Service) upsertFeedItems(ctx context.Context, items []domain.FeedItem) error {
+func (s *Service) replaceSourceViewFeedItems(ctx context.Context, source domain.SourceID, sourceView string, items []domain.FeedItem) error {
 	s.storeMu.Lock()
 	defer s.storeMu.Unlock()
-	return s.store.UpsertFeedItems(ctx, items)
+	return s.store.ReplaceFeedItemsForSourceView(ctx, source, sourceView, items)
 }
 
 func (s *Service) loadFeedAfterRefresh(ctx context.Context, view domain.SourceID, filter FeedFilter) (Snapshot, error) {

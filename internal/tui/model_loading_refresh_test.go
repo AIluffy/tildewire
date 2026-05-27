@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -146,6 +147,54 @@ func TestModelRefreshProgressUpdatesUntilFinalSnapshot(t *testing.T) {
 	}
 }
 
+func TestModelStaleRefreshSnapshotUpdatesInactiveSourceStatus(t *testing.T) {
+	initial := tuiSnapshot(false)
+	initial.View = domain.SourceHackerNews
+	initial.Counts = map[domain.SourceID]int{
+		domain.SourceAll:        3,
+		domain.SourceGitHub:     1,
+		domain.SourceHackerNews: 2,
+	}
+	initial.Statuses = []domain.SourceHealth{
+		{Source: domain.SourceGitHub, Name: "GitHub", Status: domain.SourceStatusRefreshing},
+		{Source: domain.SourceHackerNews, Name: "Hacker News", Status: domain.SourceStatusRefreshing},
+	}
+	model := NewModel(&fakeService{snapshot: initial}, initial)
+	model.refreshID = 2
+	model.refreshing = true
+
+	background := initial
+	background.View = domain.SourceAll
+	background.Counts = map[domain.SourceID]int{
+		domain.SourceAll:        7,
+		domain.SourceGitHub:     5,
+		domain.SourceHackerNews: 2,
+	}
+	background.Statuses = []domain.SourceHealth{
+		{Source: domain.SourceGitHub, Name: "GitHub", Status: domain.SourceStatusOK},
+		{Source: domain.SourceHackerNews, Name: "Hacker News", Status: domain.SourceStatusOK},
+	}
+
+	updated, cmd := model.Update(snapshotMsg{refreshID: 1, snapshot: background, message: "refresh complete"})
+	if cmd != nil {
+		t.Fatal("stale refresh snapshot should not schedule more work")
+	}
+	model = updated.(Model)
+
+	if model.view != domain.SourceHackerNews {
+		t.Fatalf("view = %s, want current Hacker News view preserved", model.view)
+	}
+	if got := modelStatus(model, domain.SourceGitHub); got != domain.SourceStatusOK {
+		t.Fatalf("inactive GitHub status = %s, want OK", got)
+	}
+	if got := modelStatus(model, domain.SourceHackerNews); got != domain.SourceStatusRefreshing {
+		t.Fatalf("active Hacker News status = %s, want current refresh status preserved", got)
+	}
+	if model.counts[domain.SourceGitHub] != 5 || model.counts[domain.SourceHackerNews] != 2 || model.counts[domain.SourceAll] != 7 {
+		t.Fatalf("merged counts = %+v, want inactive counts updated and active count preserved", model.counts)
+	}
+}
+
 func TestModelInitRefreshDoesNotForce(t *testing.T) {
 	service := &fakeService{snapshot: tuiSnapshot(false)}
 	model := NewModel(service, tuiSnapshot(false))
@@ -159,6 +208,26 @@ func TestModelInitRefreshDoesNotForce(t *testing.T) {
 	}
 	if service.lastRefreshMode != app.RefreshModeStartup {
 		t.Fatalf("init refresh mode = %s, want startup", service.lastRefreshMode)
+	}
+}
+
+func TestModelInitRequestsTerminalBackgroundColor(t *testing.T) {
+	service := &fakeService{snapshot: tuiSnapshot(false)}
+	model := NewModel(service, tuiSnapshot(false))
+	cmd := model.Init()
+	if cmd == nil {
+		t.Fatal("expected init command")
+	}
+	msg := cmd()
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("init command = %T, want batch", msg)
+	}
+	if len(batch) != 4 {
+		t.Fatalf("init command count = %d, want refresh, progress, spinner, and background color request", len(batch))
+	}
+	if got, want := reflect.TypeOf(batch[3]()), reflect.TypeOf(tea.RequestBackgroundColor()); got != want {
+		t.Fatalf("last init command returned %v, want %v", got, want)
 	}
 }
 
@@ -254,4 +323,13 @@ func TestModelSingleSourceLoadingStateRendersOnlyCurrentSource(t *testing.T) {
 			t.Fatalf("single-source loading render leaked %q:\n%s", blocked, plain)
 		}
 	}
+}
+
+func modelStatus(model Model, source domain.SourceID) domain.SourceStatus {
+	for _, status := range model.statuses {
+		if status.Source == source {
+			return status.Status
+		}
+	}
+	return domain.SourceStatusUnknown
 }

@@ -147,6 +147,47 @@ func TestCodeBlockPaletteSlightlyDeepensTerminalBackground(t *testing.T) {
 	}
 }
 
+func TestCodeBlockPaletteUsesReadableTextOnLightBackground(t *testing.T) {
+	base := color.RGBA{R: 245, G: 245, B: 245, A: 255}
+	palette := codeBlockPaletteFor(Options{
+		DarkBackground:     false,
+		TerminalBackground: base,
+		Theme:              Theme{CodeText: "#CDD6F4"},
+	})
+	background := rgba8(palette.background)
+	bodyText := rgba8(palette.bodyText)
+
+	if background.R < 220 || background.G < 220 || background.B < 220 {
+		t.Fatalf("light terminal code background should stay light, got %+v", background)
+	}
+	if bodyText.R > 80 || bodyText.G > 80 || bodyText.B > 90 {
+		t.Fatalf("light terminal code text should stay dark, got %+v", bodyText)
+	}
+}
+
+func TestRenderInlineCodeUsesLightBackgroundOnLightTerminal(t *testing.T) {
+	rendered, err := Render("Use `/understand-knowledge` and `index.md`.", Options{
+		Style:              "dark",
+		Width:              80,
+		DarkBackground:     false,
+		TerminalBackground: color.RGBA{R: 245, G: 245, B: 245, A: 255},
+		Theme:              Theme{CodeText: "#CDD6F4"},
+	})
+	if err != nil {
+		t.Fatalf("render markdown: %v", err)
+	}
+
+	if strings.Contains(rendered, "48;5;236") || strings.Contains(rendered, "48;2;32;32;44") {
+		t.Fatalf("inline code should not use dark background on light terminal:\n%q", rendered)
+	}
+	if !strings.Contains(rendered, "48;2;230;230;230") {
+		t.Fatalf("inline code should use adaptive light background:\n%q", rendered)
+	}
+	if strings.Contains(rendered, "38;2;205;214;244") {
+		t.Fatalf("inline code should not use low-contrast dark-theme text on light terminal:\n%q", rendered)
+	}
+}
+
 func TestCodeBlockPaletteUsesTableBorderColor(t *testing.T) {
 	palette := codeBlockPaletteFor(Options{
 		DarkBackground:     true,

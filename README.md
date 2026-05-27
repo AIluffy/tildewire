@@ -111,7 +111,7 @@ Product Hunt is optional and token-gated. It can appear in the TUI by default, b
 
 ### Sources
 
-The Sources panel contains All plus every enabled source in the configured order. Source counts come from the local store and update after refresh. Use `Left` and `Right` to move focus between Sources, Feed, and Preview. When Sources is focused:
+The Sources panel contains All plus every enabled source in the configured order. Source counts reflect the latest refreshed upstream windows stored locally, not accumulated historical cache totals. Use `Left` and `Right` to move focus between Sources, Feed, and Preview. When Sources is focused:
 
 - `j` / `Down` and `k` / `Up` switch the active source.
 - `J` / `Shift+Down` and `K` / `Shift+Up` reorder focused sources and save the order to config.

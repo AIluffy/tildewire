@@ -125,7 +125,12 @@ func NewModel(service FeedService, initial app.Snapshot, options ...ModelOptions
 
 // Init starts the background refresh after cached data is visible.
 func (m Model) Init() tea.Cmd {
-	return m.refreshWithProgressCmd(m.refreshID, false, app.RefreshModeStartup)
+	return batchCommands(
+		m.refreshCmd(m.refreshID, false, app.RefreshModeStartup),
+		m.refreshProgressCmd(m.refreshID),
+		m.loadingSpinner.Tick,
+		tea.RequestBackgroundColor,
+	)
 }
 
 // Update handles TUI messages and key presses.
@@ -159,6 +164,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case snapshotMsg:
 		if msg.refreshID != 0 && msg.refreshID != m.refreshID {
+			m.applyBackgroundSnapshot(msg.snapshot)
 			return m, nil
 		}
 		if msg.searchLoadID != 0 && msg.searchLoadID != m.searchLoadID {
@@ -182,7 +188,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case refreshProgressMsg:
-		if !m.refreshing || msg.refreshID != m.refreshID {
+		if msg.refreshID != m.refreshID {
+			if msg.err == nil {
+				m.applyBackgroundSnapshot(msg.snapshot)
+			}
+			return m, nil
+		}
+		if !m.refreshing {
 			return m, nil
 		}
 		if msg.err == nil {
@@ -352,6 +364,76 @@ func (m *Model) applySnapshot(snapshot app.Snapshot) {
 		m.refreshDetailContentCache()
 		m.clampDetailOffset()
 	}
+}
+
+func (m *Model) applyBackgroundSnapshot(snapshot app.Snapshot) {
+	m.statuses = mergeBackgroundStatuses(m.statuses, snapshot.Statuses, m.view)
+	m.counts = mergeBackgroundCounts(m.counts, snapshot.Counts, m.view)
+}
+
+func mergeBackgroundStatuses(current, incoming []domain.SourceHealth, active domain.SourceID) []domain.SourceHealth {
+	if len(incoming) == 0 {
+		return current
+	}
+	if active == "" || active == domain.SourceAll {
+		if len(current) > 0 {
+			return current
+		}
+		return incoming
+	}
+	incomingBySource := make(map[domain.SourceID]domain.SourceHealth, len(incoming))
+	for _, status := range incoming {
+		incomingBySource[status.Source] = status
+	}
+	merged := make([]domain.SourceHealth, 0, max(len(current), len(incoming)))
+	seen := make(map[domain.SourceID]bool, max(len(current), len(incoming)))
+	for _, status := range current {
+		if status.Source == active {
+			merged = append(merged, status)
+		} else if next, ok := incomingBySource[status.Source]; ok {
+			merged = append(merged, next)
+		} else {
+			merged = append(merged, status)
+		}
+		seen[status.Source] = true
+	}
+	for _, status := range incoming {
+		if status.Source == active || seen[status.Source] {
+			continue
+		}
+		merged = append(merged, status)
+	}
+	return merged
+}
+
+func mergeBackgroundCounts(current, incoming map[domain.SourceID]int, active domain.SourceID) map[domain.SourceID]int {
+	if len(incoming) == 0 {
+		return current
+	}
+	if active == "" || active == domain.SourceAll {
+		if len(current) > 0 {
+			return current
+		}
+		return incoming
+	}
+	merged := make(map[domain.SourceID]int, max(len(current), len(incoming)))
+	for source, count := range current {
+		merged[source] = count
+	}
+	for source, count := range incoming {
+		if source == domain.SourceAll || source == active {
+			continue
+		}
+		merged[source] = count
+	}
+	total := 0
+	for source, count := range merged {
+		if source != domain.SourceAll {
+			total += count
+		}
+	}
+	merged[domain.SourceAll] = total
+	return merged
 }
 
 func (m Model) mainPanelsVisible() bool {

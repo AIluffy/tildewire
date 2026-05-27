@@ -39,7 +39,8 @@ type DetailAdapter interface {
 // FeedStore is the persistence surface required by Service.
 type FeedStore interface {
 	ListFeed(context.Context, domain.FeedQuery) ([]domain.FeedEntry, error)
-	UpsertFeedItems(context.Context, []domain.FeedItem) error
+	CountFeed(context.Context, domain.FeedQuery) (int, error)
+	ReplaceFeedItemsForSourceView(context.Context, domain.SourceID, string, []domain.FeedItem) error
 	SetSaved(context.Context, string, bool) error
 	SetRead(context.Context, string, bool) error
 	SetHidden(context.Context, string, bool) error

@@ -8,6 +8,28 @@ import (
 	"github.com/AIluffy/tildewire/internal/store/generated"
 )
 
+// CountFeed returns the number of items matching the feed query without applying a page limit.
+func (s *Store) CountFeed(ctx context.Context, query FeedQuery) (int, error) {
+	normalized, ok := normalizeFeedQueryForStore(query)
+	if !ok {
+		return 0, nil
+	}
+	total, err := s.queries.CountFeed(ctx, generated.CountFeedParams{
+		IncludeHidden: normalized.includeHidden,
+		Source:        normalized.source,
+		SourceView:    normalized.sourceView,
+		SavedOnly:     normalized.savedOnly,
+		UnreadOnly:    normalized.unreadOnly,
+		Language:      normalized.language,
+		Tag:           normalized.tag,
+		Search:        normalized.search,
+	})
+	if err != nil {
+		return 0, err
+	}
+	return int(total), nil
+}
+
 // SourceCounts returns visible item counts for all and each source.
 func (s *Store) SourceCounts(ctx context.Context) (map[domain.SourceID]int, error) {
 	rows, err := s.queries.SourceCounts(ctx)

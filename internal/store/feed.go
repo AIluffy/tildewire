@@ -15,6 +15,17 @@ import (
 	"github.com/AIluffy/tildewire/internal/store/generated"
 )
 
+type normalizedFeedQuery struct {
+	includeHidden int
+	source        string
+	sourceView    string
+	savedOnly     int
+	unreadOnly    int
+	language      string
+	tag           string
+	search        string
+}
+
 // UpsertFeedItems writes normalized items, source context, tags, and default state.
 func (s *Store) UpsertFeedItems(ctx context.Context, items []domain.FeedItem) error {
 	if len(items) == 0 {
@@ -28,13 +39,30 @@ func (s *Store) UpsertFeedItems(ctx context.Context, items []domain.FeedItem) er
 
 	now := time.Now().UTC()
 	queries := generated.New(tx)
-	for _, item := range items {
-		item = dedupe.CanonicalizeItem(item)
-		if err := upsertItem(ctx, queries, item, now); err != nil {
-			return err
-		}
+	if err := upsertFeedItems(ctx, queries, items, now); err != nil {
+		return err
 	}
-	if err := refreshDedupeCandidates(ctx, queries, now); err != nil {
+	return tx.Commit()
+}
+
+// ReplaceFeedItemsForSourceView replaces one source-view window with freshly fetched items.
+func (s *Store) ReplaceFeedItemsForSourceView(ctx context.Context, source domain.SourceID, sourceView string, items []domain.FeedItem) error {
+	sourceView = strings.ToLower(strings.TrimSpace(sourceView))
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	queries := generated.New(tx)
+	if err := queries.DeleteItemSourcesForSourceView(ctx, generated.DeleteItemSourcesForSourceViewParams{
+		Source:     string(source),
+		SourceView: sourceView,
+	}); err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	if err := upsertFeedItems(ctx, queries, items, now); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -46,36 +74,20 @@ func (s *Store) ListFeed(ctx context.Context, query FeedQuery) ([]domain.FeedEnt
 	if limit <= 0 {
 		limit = 200
 	}
-	includeHidden := 0
-	if query.IncludeHidden {
-		includeHidden = 1
-	}
-	savedOnly := 0
-	if query.SavedOnly {
-		savedOnly = 1
-	}
-	unreadOnly := 0
-	if query.UnreadOnly {
-		unreadOnly = 1
-	}
-	language := strings.ToLower(strings.TrimSpace(query.Language))
-	tag := strings.ToLower(strings.TrimSpace(query.Tag))
-	rawSearch := strings.TrimSpace(query.Search)
-	search := ftsMatchQuery(rawSearch)
-	if rawSearch != "" && search == "" {
+	normalized, ok := normalizeFeedQueryForStore(query)
+	if !ok {
 		return []domain.FeedEntry{}, nil
 	}
-	sourceView := strings.ToLower(strings.TrimSpace(query.SourceView))
 
 	rows, err := s.queries.ListFeed(ctx, generated.ListFeedParams{
-		IncludeHidden: includeHidden,
-		Source:        string(query.Source),
-		SourceView:    sourceView,
-		SavedOnly:     savedOnly,
-		UnreadOnly:    unreadOnly,
-		Language:      language,
-		Tag:           tag,
-		Search:        search,
+		IncludeHidden: normalized.includeHidden,
+		Source:        normalized.source,
+		SourceView:    normalized.sourceView,
+		SavedOnly:     normalized.savedOnly,
+		UnreadOnly:    normalized.unreadOnly,
+		Language:      normalized.language,
+		Tag:           normalized.tag,
+		Search:        normalized.search,
 		Limit:         int64(limit),
 	})
 	if err != nil {
@@ -99,7 +111,7 @@ func (s *Store) ListFeed(ctx context.Context, query FeedQuery) ([]domain.FeedEnt
 	}
 	for idx := range entries {
 		itemID := entries[idx].Item.ID
-		sources := filterSourcesForQuery(sourcesByItem[itemID], query.Source, sourceView)
+		sources := filterSourcesForQuery(sourcesByItem[itemID], query.Source, normalized.sourceView)
 		entries[idx].Sources = sources
 		entries[idx].Item.Sources = sources
 		entries[idx].Item.Tags = tagsByItem[itemID]
@@ -110,6 +122,40 @@ func (s *Store) ListFeed(ctx context.Context, query FeedQuery) ([]domain.FeedEnt
 		})
 	}
 	return entries, nil
+}
+
+func normalizeFeedQueryForStore(query FeedQuery) (normalizedFeedQuery, bool) {
+	normalized := normalizedFeedQuery{
+		source:     string(query.Source),
+		sourceView: strings.ToLower(strings.TrimSpace(query.SourceView)),
+		language:   strings.ToLower(strings.TrimSpace(query.Language)),
+		tag:        strings.ToLower(strings.TrimSpace(query.Tag)),
+	}
+	if query.IncludeHidden {
+		normalized.includeHidden = 1
+	}
+	if query.SavedOnly {
+		normalized.savedOnly = 1
+	}
+	if query.UnreadOnly {
+		normalized.unreadOnly = 1
+	}
+	rawSearch := strings.TrimSpace(query.Search)
+	normalized.search = ftsMatchQuery(rawSearch)
+	if rawSearch != "" && normalized.search == "" {
+		return normalizedFeedQuery{}, false
+	}
+	return normalized, true
+}
+
+func upsertFeedItems(ctx context.Context, queries *generated.Queries, items []domain.FeedItem, now time.Time) error {
+	for _, item := range items {
+		item = dedupe.CanonicalizeItem(item)
+		if err := upsertItem(ctx, queries, item, now); err != nil {
+			return err
+		}
+	}
+	return refreshDedupeCandidates(ctx, queries, now)
 }
 
 func filterSourcesForQuery(sources []domain.ItemSource, source domain.SourceID, sourceView string) []domain.ItemSource {

@@ -19,6 +19,7 @@ const (
 	markdownImageMaxBytes     = md.MaxImageBytes
 	detailRawLinePrefix       = md.RawLinePrefix
 	detailRawImageRedrawDelay = 100 * time.Millisecond
+	detailImageMaxHeight      = 40
 )
 
 type markdownImageRef = md.ImageRef
@@ -94,11 +95,11 @@ func (m *Model) queueDetailImagePreviewCmds() tea.Cmd {
 }
 
 func detailImagePreviewHeight(width, visibleHeight int) int {
-	height := max(4, width/3)
+	height := max(4, width/2)
 	if visibleHeight > 4 {
 		height = min(height, max(4, visibleHeight-3))
 	}
-	return clamp(height, 4, 24)
+	return clamp(height, 4, detailImageMaxHeight)
 }
 
 func (m Model) renderMarkdownImageSegment(ref markdownImageRef, width int) string {

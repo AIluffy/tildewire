@@ -1,6 +1,7 @@
 package markdown
 
 import (
+	"fmt"
 	"image/color"
 	"strings"
 
@@ -55,7 +56,7 @@ func RenderDocument(markdown string, options Options) (RenderedDocument, error) 
 	}
 	width := max(1, options.Width)
 	rendererOptions := []glamour.TermRendererOption{
-		glamourStyleOption(style, options.CleanHeadingPrefixes, options.Theme),
+		glamourStyleOption(style, options.CleanHeadingPrefixes, options.Theme, options),
 		glamour.WithWordWrap(width),
 		glamour.WithTableWrap(options.TableWrap),
 	}
@@ -81,8 +82,8 @@ type markdownRenderer interface {
 	Render(string) (string, error)
 }
 
-func glamourStyleOption(style string, cleanHeadingPrefixes bool, theme Theme) glamour.TermRendererOption {
-	if !cleanHeadingPrefixes && theme.empty() {
+func glamourStyleOption(style string, cleanHeadingPrefixes bool, theme Theme, options Options) glamour.TermRendererOption {
+	if !cleanHeadingPrefixes && theme.empty() && options.TerminalBackground == nil {
 		return glamour.WithStandardStyle(style)
 	}
 	styleConfig, ok := glamourStyles.DefaultStyles[style]
@@ -99,6 +100,7 @@ func glamourStyleOption(style string, cleanHeadingPrefixes bool, theme Theme) gl
 		config.H6.Prefix = cleanMarkdownHeadingPrefix(config.H6.Prefix)
 	}
 	applyGlamourTheme(&config, theme)
+	applyAdaptiveInlineCodeStyle(&config, options)
 	return glamour.WithStyles(config)
 }
 
@@ -127,6 +129,17 @@ func applyGlamourTheme(config *glamourANSI.StyleConfig, theme Theme) {
 	}
 }
 
+func applyAdaptiveInlineCodeStyle(config *glamourANSI.StyleConfig, options Options) {
+	if options.TerminalBackground == nil {
+		return
+	}
+	palette := codeBlockPaletteFor(options)
+	foreground := colorToHex(palette.bodyText)
+	background := colorToHex(palette.background)
+	config.Code.Color = &foreground
+	config.Code.BackgroundColor = &background
+}
+
 func (theme Theme) empty() bool {
 	return strings.TrimSpace(theme.Accent) == "" &&
 		strings.TrimSpace(theme.Muted) == "" &&
@@ -140,4 +153,9 @@ func cleanMarkdownHeadingPrefix(prefix string) string {
 		return ""
 	}
 	return prefix
+}
+
+func colorToHex(value color.Color) string {
+	rgba := color.RGBAModel.Convert(value).(color.RGBA)
+	return fmt.Sprintf("#%02X%02X%02X", rgba.R, rgba.G, rgba.B)
 }

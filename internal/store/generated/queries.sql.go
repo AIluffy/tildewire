@@ -61,6 +61,59 @@ func (q *Queries) ClearUnsavedItems(ctx context.Context) error {
 	return err
 }
 
+const countFeed = `-- name: CountFeed :one
+SELECT COUNT(*) AS total
+FROM items i
+LEFT JOIN item_state st ON st.item_id = i.id
+WHERE (?1 = 1 OR COALESCE(st.hidden, 0) = 0)
+  AND (?2 = '' OR EXISTS (
+    SELECT 1 FROM item_sources src
+    WHERE src.item_id = i.id
+      AND src.source = ?2
+      AND (?3 = '' OR lower(src.source_view) = ?3)
+  ))
+  AND (?4 = 0 OR COALESCE(st.saved, 0) = 1)
+  AND (?5 = 0 OR COALESCE(st.read, 0) = 0)
+  AND (?6 = '' OR lower(COALESCE(i.language, '')) = ?6)
+  AND (?7 = '' OR EXISTS (
+    SELECT 1 FROM item_tags tag WHERE tag.item_id = i.id AND lower(tag.tag) = ?7
+  ))
+  AND (?8 = '' OR EXISTS (
+    SELECT 1 FROM item_search search
+    WHERE search.item_id = i.id
+      AND item_search MATCH ?8
+    LIMIT 1
+  )
+  )
+`
+
+type CountFeedParams struct {
+	IncludeHidden interface{}
+	Source        interface{}
+	SourceView    interface{}
+	SavedOnly     interface{}
+	UnreadOnly    interface{}
+	Language      interface{}
+	Tag           interface{}
+	Search        interface{}
+}
+
+func (q *Queries) CountFeed(ctx context.Context, arg CountFeedParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countFeed,
+		arg.IncludeHidden,
+		arg.Source,
+		arg.SourceView,
+		arg.SavedOnly,
+		arg.UnreadOnly,
+		arg.Language,
+		arg.Tag,
+		arg.Search,
+	)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const createPersonalizationRule = `-- name: CreatePersonalizationRule :one
 INSERT INTO personalization_rules (effect, target, value, enabled, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?)
@@ -104,6 +157,22 @@ DELETE FROM item_search WHERE item_id = ?
 
 func (q *Queries) DeleteItemSearch(ctx context.Context, itemID string) error {
 	_, err := q.db.ExecContext(ctx, deleteItemSearch, itemID)
+	return err
+}
+
+const deleteItemSourcesForSourceView = `-- name: DeleteItemSourcesForSourceView :exec
+DELETE FROM item_sources
+WHERE source = ?
+  AND lower(source_view) = ?
+`
+
+type DeleteItemSourcesForSourceViewParams struct {
+	Source     string
+	SourceView string
+}
+
+func (q *Queries) DeleteItemSourcesForSourceView(ctx context.Context, arg DeleteItemSourcesForSourceViewParams) error {
+	_, err := q.db.ExecContext(ctx, deleteItemSourcesForSourceView, arg.Source, arg.SourceView)
 	return err
 }
 

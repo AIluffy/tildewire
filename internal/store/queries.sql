@@ -29,6 +29,31 @@ WHERE (sqlc.arg(include_hidden) = 1 OR COALESCE(st.hidden, 0) = 0)
 ORDER BY i.last_seen_at DESC
 LIMIT sqlc.arg(limit);
 
+-- name: CountFeed :one
+SELECT COUNT(*) AS total
+FROM items i
+LEFT JOIN item_state st ON st.item_id = i.id
+WHERE (sqlc.arg(include_hidden) = 1 OR COALESCE(st.hidden, 0) = 0)
+  AND (sqlc.arg(source) = '' OR EXISTS (
+    SELECT 1 FROM item_sources src
+    WHERE src.item_id = i.id
+      AND src.source = sqlc.arg(source)
+      AND (sqlc.arg(source_view) = '' OR lower(src.source_view) = sqlc.arg(source_view))
+  ))
+  AND (sqlc.arg(saved_only) = 0 OR COALESCE(st.saved, 0) = 1)
+  AND (sqlc.arg(unread_only) = 0 OR COALESCE(st.read, 0) = 0)
+  AND (sqlc.arg(language) = '' OR lower(COALESCE(i.language, '')) = sqlc.arg(language))
+  AND (sqlc.arg(tag) = '' OR EXISTS (
+    SELECT 1 FROM item_tags tag WHERE tag.item_id = i.id AND lower(tag.tag) = sqlc.arg(tag)
+  ))
+  AND (sqlc.arg(search) = '' OR EXISTS (
+    SELECT 1 FROM item_search search
+    WHERE search.item_id = i.id
+      AND item_search MATCH sqlc.arg(search)
+    LIMIT 1
+  )
+  );
+
 -- name: UpsertItem :exec
 INSERT INTO items (id, canonical_key, title, subtitle, summary, url, canonical_url, comments_url, item_type, author, organization, language,
                    published_at, first_seen_at, last_seen_at, repo, arxiv_id, metrics_json, refs_json, metadata_json, simhash)
@@ -78,6 +103,11 @@ ON CONFLICT(source, source_view, source_id) DO UPDATE SET
   metrics_json = excluded.metrics_json,
   raw_json = excluded.raw_json,
   seen_at = excluded.seen_at;
+
+-- name: DeleteItemSourcesForSourceView :exec
+DELETE FROM item_sources
+WHERE source = ?
+  AND lower(source_view) = ?;
 
 -- name: ListItemSources :many
 SELECT source, source_view, source_id, source_rank, COALESCE(source_url, '') AS source_url,

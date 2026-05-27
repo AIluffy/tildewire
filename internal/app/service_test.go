@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -958,6 +959,47 @@ func TestRefreshContinuesAfterFailureWhenAdaptersRunInBatch(t *testing.T) {
 	}
 }
 
+func TestRefreshReplacesSourceViewWindowInsteadOfAccumulatingHistory(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+	now := time.Date(2026, 5, 10, 10, 0, 0, 0, time.UTC)
+	adapter := &fakeAdapter{
+		source: domain.SourceHackerNews,
+		scopes: []domain.FetchScope{{Source: domain.SourceHackerNews, View: "top"}},
+		items: []domain.FeedItem{
+			appTestSourceItem("hn-1", "hackernews:1", "HN one", domain.SourceHackerNews, 1, now),
+			appTestSourceItem("hn-2", "hackernews:2", "HN two", domain.SourceHackerNews, 2, now.Add(time.Second)),
+			appTestSourceItem("hn-3", "hackernews:3", "HN three", domain.SourceHackerNews, 3, now.Add(2*time.Second)),
+		},
+	}
+	service := NewService(db, httpx.New(time.Second), []SourceAdapter{adapter})
+
+	if _, err := service.Refresh(ctx, domain.SourceHackerNews, FeedFilter{}, RefreshOptions{Mode: RefreshModeVisible}); err != nil {
+		t.Fatal(err)
+	}
+
+	adapter.items = []domain.FeedItem{
+		appTestSourceItem("hn-2", "hackernews:2", "HN two updated", domain.SourceHackerNews, 1, now.Add(3*time.Second)),
+		appTestSourceItem("hn-4", "hackernews:4", "HN four", domain.SourceHackerNews, 2, now.Add(4*time.Second)),
+	}
+	snapshot, err := service.Refresh(ctx, domain.SourceHackerNews, FeedFilter{}, RefreshOptions{Mode: RefreshModeVisible})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(snapshot.Entries) != 2 {
+		t.Fatalf("Hacker News entries = %d, want latest upstream window size 2: %+v", len(snapshot.Entries), snapshot.Entries)
+	}
+	if snapshot.Counts[domain.SourceHackerNews] != 2 || snapshot.Counts[domain.SourceAll] != 2 {
+		t.Fatalf("counts = %+v, want Hacker News and All to reflect latest upstream window size 2", snapshot.Counts)
+	}
+	gotIDs := []string{snapshot.Entries[0].Sources[0].SourceIDRaw, snapshot.Entries[1].Sources[0].SourceIDRaw}
+	if !reflect.DeepEqual(gotIDs, []string{"hn-2", "hn-4"}) {
+		t.Fatalf("Hacker News window item ids = %+v, want [hn-2 hn-4]", gotIDs)
+	}
+}
+
 func TestLoadFeedIncludesGitHubAndSourceCounts(t *testing.T) {
 	ctx := context.Background()
 	db := openAppTestStore(t)
@@ -1009,6 +1051,41 @@ func TestLoadFeedIncludesGitHubAndSourceCounts(t *testing.T) {
 	}
 	if githubWeeklySnapshot.Counts[domain.SourceAll] != githubWeeklySnapshot.Counts[domain.SourceGitHub]+githubWeeklySnapshot.Counts[domain.SourceHackerNews]+githubWeeklySnapshot.Counts[domain.SourceHuggingFace] {
 		t.Fatalf("all count should track active source scope count: %+v", githubWeeklySnapshot.Counts)
+	}
+}
+
+func TestLoadFeedSingleSourceCountIsNotCappedByPageLimit(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+	now := time.Date(2026, 5, 10, 10, 0, 0, 0, time.UTC)
+	items := make([]domain.FeedItem, 0, 306)
+	for idx := 1; idx <= 306; idx++ {
+		id := fmt.Sprintf("hn-%03d", idx)
+		items = append(items, appTestSourceItem(id, "hackernews:"+id, "HN story "+id, domain.SourceHackerNews, idx, now.Add(time.Duration(idx)*time.Second)))
+	}
+	if err := db.UpsertFeedItems(ctx, items); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(db, httpx.New(time.Second), nil)
+
+	all, err := service.LoadFeed(ctx, domain.SourceAll, FeedFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if all.Counts[domain.SourceHackerNews] != 306 {
+		t.Fatalf("all view Hacker News count = %d, want 306", all.Counts[domain.SourceHackerNews])
+	}
+
+	hackerNews, err := service.LoadFeed(ctx, domain.SourceHackerNews, FeedFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hackerNews.Entries) != 250 {
+		t.Fatalf("loaded Hacker News entries = %d, want page limit 250", len(hackerNews.Entries))
+	}
+	if hackerNews.Counts[domain.SourceHackerNews] != 306 {
+		t.Fatalf("selected Hacker News count = %d, want 306", hackerNews.Counts[domain.SourceHackerNews])
 	}
 }
 

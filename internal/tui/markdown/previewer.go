@@ -24,6 +24,11 @@ const MaxImageBytes = 8 << 20
 
 const markdownImageTimeout = 12 * time.Second
 
+const (
+	markdownImagePreviewMaxWidthCells  = 96
+	markdownImagePreviewMaxHeightCells = 40
+)
+
 // ImageRequest describes one Markdown image render request.
 type ImageRequest struct {
 	URL       string
@@ -76,8 +81,8 @@ func (p *TerminalImagePreviewer) RenderMarkdownImage(ctx context.Context, reques
 	if err != nil {
 		return ImageResult{}, err
 	}
-	width := clamp(request.Width, 16, 96)
-	height := clamp(request.MaxHeight, 4, 24)
+	width := clamp(request.Width, 16, markdownImagePreviewMaxWidthCells)
+	height := clamp(request.MaxHeight, 4, markdownImagePreviewMaxHeightCells)
 	manager := p.managerForMode(mode)
 	msg := manager.RenderNow(ctx, tuiimage.ImageRequest{
 		ID:      request.URL,
@@ -115,8 +120,8 @@ func (p *TerminalImagePreviewer) managerForMode(mode string) *tuiimage.ImageMana
 		MaxCacheItems:           64,
 		MaxDecodedBytes:         MaxImageBytes * 4,
 		MaxRenderConcurrency:    1,
-		MaxThumbWidthCells:      96,
-		MaxThumbHeightCells:     24,
+		MaxThumbWidthCells:      markdownImagePreviewMaxWidthCells,
+		MaxThumbHeightCells:     markdownImagePreviewMaxHeightCells,
 	})
 	p.managers[mode] = manager
 	return manager

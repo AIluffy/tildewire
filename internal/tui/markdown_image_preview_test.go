@@ -65,6 +65,27 @@ func TestTerminalMarkdownImagePreviewFallsBackForExplicitKittyWhenGraphicsUnavai
 	}
 }
 
+func TestTerminalMarkdownImagePreviewAllowsTallerHalfblockSlots(t *testing.T) {
+	imageURL := stubMarkdownImageHTTP(t, 96, 96)
+	previewer := newTerminalMarkdownImagePreviewer(t.TempDir())
+
+	result, err := previewer.RenderMarkdownImage(context.Background(), markdownImagePreviewRequest{
+		URL:       imageURL,
+		Alt:       "High resolution preview",
+		Mode:      config.MarkdownImagePreviewHalfblocks,
+		CacheDir:  t.TempDir(),
+		Width:     96,
+		MaxHeight: 40,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result.Rows != 40 {
+		t.Fatalf("preview rows = %d, want 40", result.Rows)
+	}
+}
+
 func TestMarkdownImagePreviewUsesFixedRenderModeForAutoAndExplicitGraphics(t *testing.T) {
 	for _, mode := range []string{
 		config.MarkdownImagePreviewAuto,
@@ -84,6 +105,12 @@ func TestMarkdownImagePreviewUsesFixedRenderModeForAutoAndExplicitGraphics(t *te
 func TestDetailImagePreviewHeightUsesMoreOfSmallViewport(t *testing.T) {
 	if got := detailImagePreviewHeight(80, 16); got != 13 {
 		t.Fatalf("preview height = %d, want 13", got)
+	}
+}
+
+func TestDetailImagePreviewHeightAllowsTallerHighResolutionViewport(t *testing.T) {
+	if got := detailImagePreviewHeight(96, 48); got != 40 {
+		t.Fatalf("preview height = %d, want 40", got)
 	}
 }
 
