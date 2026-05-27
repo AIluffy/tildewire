@@ -230,6 +230,15 @@ func (q *Queries) DeleteItemTags(ctx context.Context, itemID string) error {
 	return err
 }
 
+const deleteItemTerms = `-- name: DeleteItemTerms :exec
+DELETE FROM item_terms WHERE item_id = ?
+`
+
+func (q *Queries) DeleteItemTerms(ctx context.Context, itemID string) error {
+	_, err := q.db.ExecContext(ctx, deleteItemTerms, itemID)
+	return err
+}
+
 const deletePersonalizationRule = `-- name: DeletePersonalizationRule :exec
 DELETE FROM personalization_rules WHERE id = ?
 `
@@ -463,6 +472,30 @@ func (q *Queries) InsertFetchEvent(ctx context.Context, arg InsertFetchEventPara
 	return err
 }
 
+const insertItemEvent = `-- name: InsertItemEvent :exec
+INSERT INTO item_events (item_id, event_type, source, view, occurred_at)
+VALUES (?, ?, ?, ?, ?)
+`
+
+type InsertItemEventParams struct {
+	ItemID     string
+	EventType  string
+	Source     string
+	View       string
+	OccurredAt string
+}
+
+func (q *Queries) InsertItemEvent(ctx context.Context, arg InsertItemEventParams) error {
+	_, err := q.db.ExecContext(ctx, insertItemEvent,
+		arg.ItemID,
+		arg.EventType,
+		arg.Source,
+		arg.View,
+		arg.OccurredAt,
+	)
+	return err
+}
+
 const insertItemSearch = `-- name: InsertItemSearch :exec
 INSERT INTO item_search (item_id, content) VALUES (?, ?)
 `
@@ -491,9 +524,30 @@ func (q *Queries) InsertItemTag(ctx context.Context, arg InsertItemTagParams) er
 	return err
 }
 
+const insertItemTerm = `-- name: InsertItemTerm :exec
+INSERT OR REPLACE INTO item_terms (item_id, kind, value, weight) VALUES (?, ?, ?, ?)
+`
+
+type InsertItemTermParams struct {
+	ItemID string
+	Kind   string
+	Value  string
+	Weight float64
+}
+
+func (q *Queries) InsertItemTerm(ctx context.Context, arg InsertItemTermParams) error {
+	_, err := q.db.ExecContext(ctx, insertItemTerm,
+		arg.ItemID,
+		arg.Kind,
+		arg.Value,
+		arg.Weight,
+	)
+	return err
+}
+
 const insertRecommendationScore = `-- name: InsertRecommendationScore :exec
-INSERT INTO recommendation_scores (item_id, score, interest_score, hot_score, computed_at)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO recommendation_scores (item_id, score, interest_score, hot_score, reason_json, computed_at)
+VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type InsertRecommendationScoreParams struct {
@@ -501,6 +555,7 @@ type InsertRecommendationScoreParams struct {
 	Score         float64
 	InterestScore float64
 	HotScore      float64
+	ReasonJson    sql.NullString
 	ComputedAt    string
 }
 
@@ -510,6 +565,7 @@ func (q *Queries) InsertRecommendationScore(ctx context.Context, arg InsertRecom
 		arg.Score,
 		arg.InterestScore,
 		arg.HotScore,
+		arg.ReasonJson,
 		arg.ComputedAt,
 	)
 	return err
@@ -1161,12 +1217,72 @@ func (q *Queries) ListRecentFetchEvents(ctx context.Context, limit int64) ([]Lis
 	return items, nil
 }
 
+const listRecommendationProfileSignals = `-- name: ListRecommendationProfileSignals :many
+SELECT signal.item_id, signal.event_type, signal.occurred_at, term.kind, term.value, term.weight
+FROM (
+  SELECT st.item_id, 'save' AS event_type, st.saved_at AS occurred_at
+  FROM item_state st
+  WHERE st.saved = 1 AND st.saved_at IS NOT NULL AND st.saved_at >= ?1
+  UNION ALL
+  SELECT st.item_id, 'hide' AS event_type, st.hidden_at AS occurred_at
+  FROM item_state st
+  WHERE st.hidden = 1 AND st.hidden_at IS NOT NULL AND st.hidden_at >= ?1
+  UNION ALL
+  SELECT ev.item_id, ev.event_type, ev.occurred_at
+  FROM item_events ev
+  WHERE ev.occurred_at >= ?1
+) signal
+JOIN item_terms term ON term.item_id = signal.item_id
+WHERE signal.occurred_at IS NOT NULL
+  AND term.value <> ''
+`
+
+type ListRecommendationProfileSignalsRow struct {
+	ItemID     string
+	EventType  string
+	OccurredAt sql.NullString
+	Kind       string
+	Value      string
+	Weight     float64
+}
+
+func (q *Queries) ListRecommendationProfileSignals(ctx context.Context, since sql.NullString) ([]ListRecommendationProfileSignalsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRecommendationProfileSignals, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRecommendationProfileSignalsRow
+	for rows.Next() {
+		var i ListRecommendationProfileSignalsRow
+		if err := rows.Scan(
+			&i.ItemID,
+			&i.EventType,
+			&i.OccurredAt,
+			&i.Kind,
+			&i.Value,
+			&i.Weight,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRecommendedFeed = `-- name: ListRecommendedFeed :many
 SELECT i.id, i.canonical_key, i.title, i.subtitle, i.summary, i.url, i.canonical_url, i.comments_url,
        i.item_type, i.author, i.organization, i.language, i.published_at, i.first_seen_at, i.last_seen_at,
        i.repo, i.arxiv_id, i.metrics_json, i.refs_json, i.metadata_json, COALESCE(i.simhash, '') AS simhash,
        COALESCE(st.read, 0) AS read, COALESCE(st.saved, 0) AS saved, COALESCE(st.hidden, 0) AS hidden,
-       st.read_at, st.saved_at, st.hidden_at, COALESCE(st.note, '') AS note
+       st.read_at, st.saved_at, st.hidden_at, COALESCE(st.note, '') AS note,
+       COALESCE(rs.reason_json, '') AS reason_json
 FROM recommendation_scores rs
 JOIN items i ON i.id = rs.item_id
 LEFT JOIN item_state st ON st.item_id = i.id
@@ -1226,6 +1342,7 @@ type ListRecommendedFeedRow struct {
 	SavedAt      sql.NullString
 	HiddenAt     sql.NullString
 	Note         string
+	ReasonJson   string
 }
 
 func (q *Queries) ListRecommendedFeed(ctx context.Context, arg ListRecommendedFeedParams) ([]ListRecommendedFeedRow, error) {
@@ -1273,6 +1390,7 @@ func (q *Queries) ListRecommendedFeed(ctx context.Context, arg ListRecommendedFe
 			&i.SavedAt,
 			&i.HiddenAt,
 			&i.Note,
+			&i.ReasonJson,
 		); err != nil {
 			return nil, err
 		}

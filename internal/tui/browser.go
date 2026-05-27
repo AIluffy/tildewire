@@ -6,7 +6,13 @@ import (
 	"runtime"
 )
 
+var openExternalURLFunc = defaultOpenExternalURL
+
 func openExternalURL(url string) error {
+	return openExternalURLFunc(url)
+}
+
+func defaultOpenExternalURL(url string) error {
 	if url == "" {
 		return nil
 	}

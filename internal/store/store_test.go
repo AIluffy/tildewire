@@ -11,6 +11,7 @@ import (
 	"github.com/AIluffy/tildewire/internal/dedupe"
 	"github.com/AIluffy/tildewire/internal/domain"
 	"github.com/AIluffy/tildewire/internal/httpcache"
+	"github.com/AIluffy/tildewire/internal/recommend"
 )
 
 func TestStoreMigratesUpsertsStateAndHiddenFiltering(t *testing.T) {
@@ -622,6 +623,104 @@ func TestStoreRecommendationScoresRoundTripAndFilters(t *testing.T) {
 	}
 }
 
+func TestStoreRecommendationEventsTermsProfileAndReasons(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t)
+	defer store.Close()
+
+	now := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
+	item := testSourceItem("repo-ai", "repo:owner/ai", "AI terminal agent", domain.SourceGitHub, 1)
+	item.LastSeenAt = now
+	item.Tags = []string{"ai"}
+	if err := store.UpsertFeedItems(ctx, []domain.FeedItem{item}); err != nil {
+		t.Fatal(err)
+	}
+	terms := itemTermsForTest(t, store, item.ID)
+	if !terms[recommend.TermKey("tag", "ai")] || !terms[recommend.TermKey("source", "github")] {
+		t.Fatalf("persisted terms missing expected tag/source: %+v", terms)
+	}
+
+	item.Tags = []string{"rust"}
+	if err := store.UpsertFeedItems(ctx, []domain.FeedItem{item}); err != nil {
+		t.Fatal(err)
+	}
+	terms = itemTermsForTest(t, store, item.ID)
+	if terms[recommend.TermKey("tag", "ai")] || !terms[recommend.TermKey("tag", "rust")] {
+		t.Fatalf("terms were not refreshed after upsert: %+v", terms)
+	}
+
+	if err := store.RecordItemEvent(ctx, domain.ItemEvent{
+		ItemID:     item.ID,
+		EventType:  domain.ItemEventOpenURL,
+		Source:     domain.SourceGitHub,
+		View:       domain.SourceRecommend,
+		OccurredAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	profile, err := store.RecommendationProfile(ctx, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceTerm := profile.Terms[recommend.TermKey("source", "github")]
+	if sourceTerm.Positive <= 0 {
+		t.Fatalf("source profile term = %+v, want positive", sourceTerm)
+	}
+	if len(sourceTerm.Reasons) == 0 || sourceTerm.Reasons[0].Label != "opened github" {
+		t.Fatalf("source reasons = %+v, want opened github", sourceTerm.Reasons)
+	}
+
+	reasons := []domain.RecommendationReason{{Kind: "tag", Value: "rust", Label: "opened rust", Weight: 0.8}}
+	if err := store.ReplaceRecommendationScores(ctx, []domain.RecommendationScore{{
+		ItemID:        item.ID,
+		Score:         1.2,
+		InterestScore: 1.0,
+		HotScore:      0.8,
+		Reasons:       reasons,
+		ComputedAt:    now,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := store.ListRecommendedFeed(ctx, domain.FeedQuery{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || len(entries[0].RecommendationReasons) != 1 || entries[0].RecommendationReasons[0].Label != "opened rust" {
+		t.Fatalf("recommendation reasons did not round-trip: %+v", entries)
+	}
+}
+
+func TestStoreRecommendationProfileBackfillsMissingTerms(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t)
+	defer store.Close()
+
+	now := time.Now().UTC()
+	item := testSourceItem("repo-ai-backfill", "repo:owner/ai-backfill", "AI agent backfill", domain.SourceGitHub, 1)
+	item.LastSeenAt = now
+	item.Tags = []string{"ai"}
+	if err := store.UpsertFeedItems(ctx, []domain.FeedItem{item}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetSaved(ctx, item.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.db.ExecContext(ctx, `DELETE FROM item_terms WHERE item_id = ?`, item.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	profile, err := store.RecommendationProfile(ctx, now.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if term := profile.Terms[recommend.TermKey("tag", "ai")]; term.Positive <= 0 {
+		t.Fatalf("backfilled tag profile term = %+v, want positive", term)
+	}
+	if terms := itemTermsForTest(t, store, item.ID); !terms[recommend.TermKey("tag", "ai")] {
+		t.Fatalf("item terms were not backfilled: %+v", terms)
+	}
+}
+
 func TestStoreInitialMVPSourceStatusesAreEnabled(t *testing.T) {
 	ctx := context.Background()
 	store := openTestStore(t)
@@ -660,8 +759,8 @@ func TestStoreMigrateIsIdempotent(t *testing.T) {
 		t.Fatalf("migration version rows changed after second migrate: before=%d after=%d", before, after)
 	}
 	latest := latestMigrationVersion(t, store.db)
-	if latest != 7 {
-		t.Fatalf("latest migration version = %d, want 7", latest)
+	if latest != 8 {
+		t.Fatalf("latest migration version = %d, want 8", latest)
 	}
 }
 
@@ -698,11 +797,11 @@ func TestStoreMigrateAcceptsExistingGooseVersionTable(t *testing.T) {
 	if err := store.Migrate(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if got := migrationVersionRows(t, store.db); got != 7 {
-		t.Fatalf("migration version rows = %d, want versions 1 through 7", got)
+	if got := migrationVersionRows(t, store.db); got != 8 {
+		t.Fatalf("migration version rows = %d, want versions 1 through 8", got)
 	}
-	if got := latestMigrationVersion(t, store.db); got != 7 {
-		t.Fatalf("latest migration version = %d, want 7", got)
+	if got := latestMigrationVersion(t, store.db); got != 8 {
+		t.Fatalf("latest migration version = %d, want 8", got)
 	}
 }
 
@@ -858,6 +957,28 @@ func latestMigrationVersion(t *testing.T, db *sql.DB) int {
 		t.Fatal(err)
 	}
 	return version
+}
+
+func itemTermsForTest(t *testing.T, store *Store, itemID string) map[string]bool {
+	t.Helper()
+	rows, err := store.db.Query(`SELECT kind, value FROM item_terms WHERE item_id = ?`, itemID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	terms := make(map[string]bool)
+	for rows.Next() {
+		var kind string
+		var value string
+		if err := rows.Scan(&kind, &value); err != nil {
+			t.Fatal(err)
+		}
+		terms[recommend.TermKey(kind, value)] = true
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return terms
 }
 
 func findStoreStatus(statuses []domain.SourceHealth, source domain.SourceID) domain.SourceStatus {

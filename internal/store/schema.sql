@@ -70,6 +70,14 @@ CREATE TABLE IF NOT EXISTS item_tags (
   PRIMARY KEY (item_id, tag)
 );
 
+CREATE TABLE IF NOT EXISTS item_terms (
+  item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  value TEXT NOT NULL,
+  weight REAL NOT NULL,
+  PRIMARY KEY (item_id, kind, value)
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS item_search USING fts5(
   item_id UNINDEXED,
   content,
@@ -85,6 +93,15 @@ CREATE TABLE IF NOT EXISTS item_state (
   saved_at TEXT,
   hidden_at TEXT,
   note TEXT
+);
+
+CREATE TABLE IF NOT EXISTS item_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  event_type TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT '',
+  view TEXT NOT NULL DEFAULT '',
+  occurred_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS rate_limit_state (
@@ -144,6 +161,7 @@ CREATE TABLE IF NOT EXISTS recommendation_scores (
   score REAL NOT NULL,
   interest_score REAL NOT NULL,
   hot_score REAL NOT NULL,
+  reason_json TEXT,
   computed_at TEXT NOT NULL
 );
 
@@ -154,9 +172,12 @@ CREATE INDEX IF NOT EXISTS idx_items_repo ON items(repo);
 CREATE INDEX IF NOT EXISTS idx_items_arxiv ON items(arxiv_id);
 CREATE INDEX IF NOT EXISTS idx_item_sources_item ON item_sources(item_id);
 CREATE INDEX IF NOT EXISTS idx_item_sources_source_rank ON item_sources(source, source_view, source_rank);
+CREATE INDEX IF NOT EXISTS idx_item_terms_lookup ON item_terms(kind, value);
 CREATE INDEX IF NOT EXISTS idx_item_state_saved ON item_state(saved);
 CREATE INDEX IF NOT EXISTS idx_item_state_read ON item_state(read);
 CREATE INDEX IF NOT EXISTS idx_item_state_hidden ON item_state(hidden);
+CREATE INDEX IF NOT EXISTS idx_item_events_item ON item_events(item_id);
+CREATE INDEX IF NOT EXISTS idx_item_events_recent ON item_events(occurred_at DESC, event_type);
 CREATE INDEX IF NOT EXISTS idx_fetch_history_started ON fetch_history(started_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_personalization_rules_enabled ON personalization_rules(enabled, effect, target);
 CREATE INDEX IF NOT EXISTS idx_dedupe_candidates_score ON dedupe_candidates(score DESC, updated_at DESC);

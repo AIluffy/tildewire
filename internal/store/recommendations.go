@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"time"
 
@@ -26,6 +27,10 @@ func (s *Store) ReplaceRecommendationScores(ctx context.Context, scores []domain
 		if score.ItemID == "" {
 			continue
 		}
+		reasonJSON, err := json.Marshal(score.Reasons)
+		if err != nil {
+			return err
+		}
 		computedAt := score.ComputedAt
 		if computedAt.IsZero() {
 			computedAt = now
@@ -35,6 +40,7 @@ func (s *Store) ReplaceRecommendationScores(ctx context.Context, scores []domain
 			Score:         score.Score,
 			InterestScore: score.InterestScore,
 			HotScore:      score.HotScore,
+			ReasonJson:    sql.NullString{String: string(reasonJSON), Valid: len(score.Reasons) > 0},
 			ComputedAt:    formatTime(computedAt),
 		}); err != nil {
 			return err
@@ -136,6 +142,9 @@ func scanRecommendedEntry(row generated.ListRecommendedFeedRow) domain.FeedEntry
 	}
 	if row.MetadataJson.Valid && row.MetadataJson.String != "" {
 		entry.Item.Metadata = json.RawMessage(row.MetadataJson.String)
+	}
+	if row.ReasonJson != "" {
+		_ = json.Unmarshal([]byte(row.ReasonJson), &entry.RecommendationReasons)
 	}
 	entry.Item.SimHash = row.Simhash
 	entry.State = domain.ItemState{

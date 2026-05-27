@@ -12,6 +12,7 @@ import (
 
 	"github.com/AIluffy/tildewire/internal/dedupe"
 	"github.com/AIluffy/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/recommend"
 	"github.com/AIluffy/tildewire/internal/store/generated"
 )
 
@@ -252,6 +253,19 @@ func upsertItem(ctx context.Context, queries *generated.Queries, item domain.Fee
 			continue
 		}
 		if err := queries.InsertItemTag(ctx, generated.InsertItemTagParams{ItemID: item.ID, Tag: tag}); err != nil {
+			return err
+		}
+	}
+	if err := queries.DeleteItemTerms(ctx, item.ID); err != nil {
+		return err
+	}
+	for _, term := range recommend.TermsForItem(item) {
+		if err := queries.InsertItemTerm(ctx, generated.InsertItemTermParams{
+			ItemID: item.ID,
+			Kind:   term.Kind,
+			Value:  term.Value,
+			Weight: term.Weight,
+		}); err != nil {
 			return err
 		}
 	}

@@ -11,6 +11,11 @@ import (
 
 // LoadDetail loads source-native detail content for a feed entry.
 func (s *Service) LoadDetail(ctx context.Context, entry domain.FeedEntry) (domain.ItemDetail, error) {
+	_ = s.RecordItemEvent(ctx, domain.ItemEvent{
+		ItemID:    entry.Item.ID,
+		EventType: domain.ItemEventDetailOpen,
+		Source:    entry.PrimarySource().Source,
+	})
 	detail := baseDetail(entry)
 	if detail.LoadedAt.IsZero() {
 		detail.LoadedAt = time.Now().UTC()

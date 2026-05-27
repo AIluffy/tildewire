@@ -32,6 +32,15 @@ func (s *Service) SetHidden(ctx context.Context, itemID string, hidden bool, vie
 	})
 }
 
+// RecordItemEvent records an explicit local interaction for future recommendations.
+func (s *Service) RecordItemEvent(ctx context.Context, event domain.ItemEvent) error {
+	if err := s.store.RecordItemEvent(ctx, event); err != nil {
+		return err
+	}
+	s.markRecommendationsDirty()
+	return nil
+}
+
 // CreatePersonalizationRule persists a rule and reloads the current feed.
 func (s *Service) CreatePersonalizationRule(ctx context.Context, rule domain.PersonalizationRule, view domain.SourceID, filter FeedFilter) (Snapshot, error) {
 	return s.reloadAfter(ctx, view, filter, func(ctx context.Context) error {

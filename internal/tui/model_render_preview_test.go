@@ -38,6 +38,27 @@ func TestModelRecommendHeaderUsesRecommendTitle(t *testing.T) {
 	}
 }
 
+func TestModelRecommendPreviewShowsRecommendationReasons(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	snapshot.View = domain.SourceRecommend
+	snapshot.Entries[0].RecommendationReasons = []domain.RecommendationReason{
+		{Kind: "tag", Value: "ai", Label: "saved ai", Weight: 1},
+		{Kind: "source", Value: "github", Label: "opened github", Weight: 0.8},
+	}
+	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+
+	rendered := ansi.Strip(model.renderPreview(42, 10))
+	if !strings.Contains(rendered, "Because: saved ai, opened github") {
+		t.Fatalf("recommend preview did not show reasons:\n%s", rendered)
+	}
+
+	model.view = domain.SourceAll
+	rendered = ansi.Strip(model.renderPreview(42, 10))
+	if strings.Contains(rendered, "Because:") {
+		t.Fatalf("non-recommend preview should not show reasons:\n%s", rendered)
+	}
+}
+
 func TestModelHeaderRendersGradientTitle(t *testing.T) {
 	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false))
 

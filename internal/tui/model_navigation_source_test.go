@@ -46,6 +46,94 @@ func TestModelSaveCommandReloadsSnapshot(t *testing.T) {
 	}
 }
 
+func TestModelOpenAndCopyCommandsRecordRecommendationEvents(t *testing.T) {
+	previousOpen := openExternalURLFunc
+	previousClipboard := writeClipboard
+	defer func() {
+		openExternalURLFunc = previousOpen
+		writeClipboard = previousClipboard
+	}()
+	var openedURL string
+	openExternalURLFunc = func(url string) error {
+		openedURL = url
+		return nil
+	}
+	var copiedValue string
+	writeClipboard = func(value string) error {
+		copiedValue = value
+		return nil
+	}
+
+	snapshot := tuiSnapshot(false)
+	service := &fakeService{snapshot: snapshot}
+	model := NewModel(service, snapshot)
+
+	_, openCmd := model.Update(keyPress("o"))
+	if openCmd == nil {
+		t.Fatal("expected open command")
+	}
+	if msg := openCmd(); msg.(statusMsg).message != "opened url" {
+		t.Fatalf("open status = %+v", msg)
+	}
+	if openedURL != snapshot.Entries[0].Item.URL {
+		t.Fatalf("opened url = %q, want %q", openedURL, snapshot.Entries[0].Item.URL)
+	}
+
+	_, copyCmd := model.Update(keyPress("y"))
+	if copyCmd == nil {
+		t.Fatal("expected copy command")
+	}
+	if msg := copyCmd(); msg.(statusMsg).message != "copied url" {
+		t.Fatalf("copy status = %+v", msg)
+	}
+	if copiedValue != snapshot.Entries[0].Item.URL {
+		t.Fatalf("copied value = %q, want %q", copiedValue, snapshot.Entries[0].Item.URL)
+	}
+
+	if len(service.itemEvents) != 2 {
+		t.Fatalf("recorded events = %+v, want open and copy events", service.itemEvents)
+	}
+	if service.itemEvents[0].EventType != domain.ItemEventOpenURL || service.itemEvents[1].EventType != domain.ItemEventCopyURL {
+		t.Fatalf("recorded event types = %+v", service.itemEvents)
+	}
+	if service.itemEvents[0].ItemID != snapshot.Entries[0].Item.ID || service.itemEvents[1].ItemID != snapshot.Entries[0].Item.ID {
+		t.Fatalf("recorded item ids = %+v", service.itemEvents)
+	}
+}
+
+func TestModelOpenSourceWithEmptyURLDoesNotRecordRecommendationEvent(t *testing.T) {
+	previousOpen := openExternalURLFunc
+	defer func() {
+		openExternalURLFunc = previousOpen
+	}()
+	openCalls := 0
+	openExternalURLFunc = func(url string) error {
+		openCalls++
+		if strings.TrimSpace(url) != "" {
+			t.Fatalf("opened url = %q, want empty no-op", url)
+		}
+		return nil
+	}
+
+	snapshot := tuiSnapshot(false)
+	service := &fakeService{snapshot: snapshot}
+	model := NewModel(service, snapshot)
+
+	_, openCmd := model.Update(keyPress("O"))
+	if openCmd == nil {
+		t.Fatal("expected open source command")
+	}
+	if msg := openCmd(); msg.(statusMsg).message != "opened url" {
+		t.Fatalf("open source status = %+v", msg)
+	}
+	if openCalls != 1 {
+		t.Fatalf("open calls = %d, want 1", openCalls)
+	}
+	if len(service.itemEvents) != 0 {
+		t.Fatalf("recorded events = %+v, want none for empty source url", service.itemEvents)
+	}
+}
+
 func TestModelSourceKeysLoadViews(t *testing.T) {
 	service := &fakeService{snapshot: tuiSnapshot(false)}
 	model := NewModel(service, tuiSnapshot(false))

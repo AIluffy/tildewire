@@ -101,14 +101,14 @@ func (m Model) paletteCommands() []paletteCommand {
 			if !ok {
 				return m, nil
 			}
-			return m, openURLCmd(entry.Item.URL)
+			return m, m.openItemURLCmd(entry)
 		}},
 		{label: "Copy item URL", keywords: "copy item url", run: func(m Model) (Model, tea.Cmd) {
 			entry, ok := m.selected()
 			if !ok {
 				return m, nil
 			}
-			return m, copyCmd(entry.Item.URL, "copied url")
+			return m, m.copyItemURLCmd(entry)
 		}},
 		{label: "Save or unsave item", keywords: "save unsave item", run: func(m Model) (Model, tea.Cmd) {
 			entry, ok := m.selected()

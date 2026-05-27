@@ -65,7 +65,8 @@ SELECT i.id, i.canonical_key, i.title, i.subtitle, i.summary, i.url, i.canonical
        i.item_type, i.author, i.organization, i.language, i.published_at, i.first_seen_at, i.last_seen_at,
        i.repo, i.arxiv_id, i.metrics_json, i.refs_json, i.metadata_json, COALESCE(i.simhash, '') AS simhash,
        COALESCE(st.read, 0) AS read, COALESCE(st.saved, 0) AS saved, COALESCE(st.hidden, 0) AS hidden,
-       st.read_at, st.saved_at, st.hidden_at, COALESCE(st.note, '') AS note
+       st.read_at, st.saved_at, st.hidden_at, COALESCE(st.note, '') AS note,
+       COALESCE(rs.reason_json, '') AS reason_json
 FROM recommendation_scores rs
 JOIN items i ON i.id = rs.item_id
 LEFT JOIN item_state st ON st.item_id = i.id
@@ -138,6 +139,12 @@ DELETE FROM item_tags WHERE item_id = ?;
 
 -- name: InsertItemTag :exec
 INSERT OR IGNORE INTO item_tags (item_id, tag) VALUES (?, ?);
+
+-- name: DeleteItemTerms :exec
+DELETE FROM item_terms WHERE item_id = ?;
+
+-- name: InsertItemTerm :exec
+INSERT OR REPLACE INTO item_terms (item_id, kind, value, weight) VALUES (?, ?, ?, ?);
 
 -- name: DeleteItemSearch :exec
 DELETE FROM item_search WHERE item_id = ?;
@@ -230,8 +237,31 @@ WHERE NOT EXISTS (
 DELETE FROM recommendation_scores;
 
 -- name: InsertRecommendationScore :exec
-INSERT INTO recommendation_scores (item_id, score, interest_score, hot_score, computed_at)
+INSERT INTO recommendation_scores (item_id, score, interest_score, hot_score, reason_json, computed_at)
+VALUES (?, ?, ?, ?, ?, ?);
+
+-- name: InsertItemEvent :exec
+INSERT INTO item_events (item_id, event_type, source, view, occurred_at)
 VALUES (?, ?, ?, ?, ?);
+
+-- name: ListRecommendationProfileSignals :many
+SELECT signal.item_id, signal.event_type, signal.occurred_at, term.kind, term.value, term.weight
+FROM (
+  SELECT st.item_id, 'save' AS event_type, st.saved_at AS occurred_at
+  FROM item_state st
+  WHERE st.saved = 1 AND st.saved_at IS NOT NULL AND st.saved_at >= sqlc.arg(since)
+  UNION ALL
+  SELECT st.item_id, 'hide' AS event_type, st.hidden_at AS occurred_at
+  FROM item_state st
+  WHERE st.hidden = 1 AND st.hidden_at IS NOT NULL AND st.hidden_at >= sqlc.arg(since)
+  UNION ALL
+  SELECT ev.item_id, ev.event_type, ev.occurred_at
+  FROM item_events ev
+  WHERE ev.occurred_at >= sqlc.arg(since)
+) signal
+JOIN item_terms term ON term.item_id = signal.item_id
+WHERE signal.occurred_at IS NOT NULL
+  AND term.value <> '';
 
 -- name: ListItemSources :many
 SELECT source, source_view, source_id, source_rank, COALESCE(source_url, '') AS source_url,

@@ -49,6 +49,9 @@ func (m Model) previewContentLines(width int) []string {
 	if metrics := previewMetricLine(entry); metrics != "" {
 		lines = append(lines, m.styles.muted.Render(clip(metrics, width)))
 	}
+	if reasons := m.previewRecommendationReasonLines(entry, width); len(reasons) > 0 {
+		lines = append(lines, reasons...)
+	}
 	if entry.Item.Summary != "" {
 		lines = append(lines, "")
 		lines = append(lines, wrap(entry.Item.Summary, width)...)
@@ -62,6 +65,23 @@ func (m Model) previewContentLines(width int) []string {
 		lines = append(lines, links...)
 	}
 	return lines
+}
+
+func (m Model) previewRecommendationReasonLines(entry domain.FeedEntry, width int) []string {
+	if m.view != domain.SourceRecommend || len(entry.RecommendationReasons) == 0 {
+		return nil
+	}
+	labels := make([]string, 0, len(entry.RecommendationReasons))
+	for _, reason := range entry.RecommendationReasons {
+		label := strings.TrimSpace(reason.Label)
+		if label != "" {
+			labels = append(labels, label)
+		}
+	}
+	if len(labels) == 0 {
+		return nil
+	}
+	return []string{m.styles.muted.Render(clip("Because: "+strings.Join(labels, ", "), width))}
 }
 
 func previewMetricLine(entry domain.FeedEntry) string {

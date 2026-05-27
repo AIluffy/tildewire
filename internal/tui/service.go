@@ -17,6 +17,7 @@ type itemMutator interface {
 	SetSaved(context.Context, string, bool, domain.SourceID, app.FeedFilter) (app.Snapshot, error)
 	SetRead(context.Context, string, bool, domain.SourceID, app.FeedFilter) (app.Snapshot, error)
 	SetHidden(context.Context, string, bool, domain.SourceID, app.FeedFilter) (app.Snapshot, error)
+	RecordItemEvent(context.Context, domain.ItemEvent) error
 }
 
 type detailLoader interface {

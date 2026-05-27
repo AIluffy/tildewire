@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"time"
 
 	"github.com/AIluffy/tildewire/internal/domain"
 	"github.com/AIluffy/tildewire/internal/httpx"
@@ -47,6 +48,7 @@ type FeedStore interface {
 	SetSaved(context.Context, string, bool) error
 	SetRead(context.Context, string, bool) error
 	SetHidden(context.Context, string, bool) error
+	RecordItemEvent(context.Context, domain.ItemEvent) error
 	UpdateSourceStatus(context.Context, domain.SourceID, domain.SourceStatus, string) error
 	SourceStatuses(context.Context) ([]domain.SourceHealth, error)
 	RecordFetchEvent(context.Context, domain.FetchEvent) error
@@ -57,6 +59,7 @@ type FeedStore interface {
 	SetPersonalizationRuleEnabled(context.Context, int64, bool) error
 	DeletePersonalizationRule(context.Context, int64) error
 	PreferenceProfile(context.Context) (domain.PreferenceProfile, error)
+	RecommendationProfile(context.Context, time.Time) (domain.RecommendationProfile, error)
 	ListDedupeCandidates(context.Context, int) ([]domain.DedupeCandidate, error)
 	IgnoreDedupeCandidate(context.Context, string) error
 	ClearCache(context.Context) error

@@ -568,6 +568,84 @@ func TestRecommendFeedUsesBoostRulesAndSavedProfile(t *testing.T) {
 	}
 }
 
+func TestRecommendFeedUsesInteractionProfileAndReasons(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+
+	now := time.Now().UTC()
+	seed := appTestSourceItem("hn-ai-seed", "hackernews:ai-seed", "Opened AI seed", domain.SourceHackerNews, 1, now)
+	seed.Tags = []string{"ai"}
+	candidate := appTestSourceItem("gh-ai-candidate", "repo:owner/ai-candidate", "AI candidate", domain.SourceGitHub, 1, now)
+	candidate.Tags = []string{"ai"}
+	general := appTestSourceItem("gh-general", "repo:owner/general", "General candidate", domain.SourceGitHub, 2, now)
+	if err := db.UpsertFeedItems(ctx, []domain.FeedItem{seed, candidate, general}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.RecordItemEvent(ctx, domain.ItemEvent{
+		ItemID:     seed.ID,
+		EventType:  domain.ItemEventOpenURL,
+		Source:     domain.SourceHackerNews,
+		View:       domain.SourceAll,
+		OccurredAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(db, httpx.New(time.Second), nil)
+
+	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := appEntryIDs(snapshot.Entries)
+	if !slices.Contains(ids, candidate.ID) || slices.Contains(ids, general.ID) {
+		t.Fatalf("recommend ids = %+v, want interaction-trained candidate without general item", ids)
+	}
+	entry, ok := appEntryByID(snapshot.Entries, candidate.ID)
+	if !ok {
+		t.Fatalf("candidate %s missing from %+v", candidate.ID, ids)
+	}
+	if !recommendationReasonsContain(entry.RecommendationReasons, "opened ai") {
+		t.Fatalf("candidate reasons = %+v, want opened ai", entry.RecommendationReasons)
+	}
+}
+
+func TestRecommendFeedDecaysOlderInteractionSignals(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+
+	now := time.Now().UTC()
+	oldSeed := appTestSourceItem("hn-ai-old", "hackernews:ai-old", "Old AI seed", domain.SourceHackerNews, 10, now)
+	oldSeed.Tags = []string{"ai"}
+	recentSeed := appTestSourceItem("hn-rust-recent", "hackernews:rust-recent", "Recent Rust seed", domain.SourceHackerNews, 10, now)
+	recentSeed.Tags = []string{"rust"}
+	aiCandidate := appTestSourceItem("gh-ai", "repo:owner/ai", "AI candidate", domain.SourceGitHub, 10, now)
+	aiCandidate.Tags = []string{"ai"}
+	rustCandidate := appTestSourceItem("gh-rust", "repo:owner/rust", "Rust candidate", domain.SourceGitHub, 10, now)
+	rustCandidate.Tags = []string{"rust"}
+	if err := db.UpsertFeedItems(ctx, []domain.FeedItem{oldSeed, recentSeed, aiCandidate, rustCandidate}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.RecordItemEvent(ctx, domain.ItemEvent{ItemID: oldSeed.ID, EventType: domain.ItemEventOpenURL, OccurredAt: now.Add(-60 * 24 * time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.RecordItemEvent(ctx, domain.ItemEvent{ItemID: recentSeed.ID, EventType: domain.ItemEventOpenURL, OccurredAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(db, httpx.New(time.Second), nil)
+
+	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rustIndex := appEntryIndex(snapshot.Entries, rustCandidate.ID)
+	aiIndex := appEntryIndex(snapshot.Entries, aiCandidate.ID)
+	if rustIndex < 0 || aiIndex < 0 || rustIndex > aiIndex {
+		t.Fatalf("recommend order = %+v, want recent rust candidate before older ai candidate", appEntryIDs(snapshot.Entries))
+	}
+}
+
 func TestRecommendFeedLimitsToTopTen(t *testing.T) {
 	ctx := context.Background()
 	db := openAppTestStore(t)
@@ -1963,6 +2041,33 @@ func appEntryIDs(entries []domain.FeedEntry) []string {
 		ids = append(ids, entry.Item.ID)
 	}
 	return ids
+}
+
+func appEntryByID(entries []domain.FeedEntry, itemID string) (domain.FeedEntry, bool) {
+	for _, entry := range entries {
+		if entry.Item.ID == itemID {
+			return entry, true
+		}
+	}
+	return domain.FeedEntry{}, false
+}
+
+func appEntryIndex(entries []domain.FeedEntry, itemID string) int {
+	for idx, entry := range entries {
+		if entry.Item.ID == itemID {
+			return idx
+		}
+	}
+	return -1
+}
+
+func recommendationReasonsContain(reasons []domain.RecommendationReason, label string) bool {
+	for _, reason := range reasons {
+		if reason.Label == label {
+			return true
+		}
+	}
+	return false
 }
 
 func assertScopeViews(t *testing.T, scopes []domain.FetchScope, want []string) {

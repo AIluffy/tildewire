@@ -77,6 +77,15 @@ type Item struct {
 	Simhash      sql.NullString
 }
 
+type ItemEvent struct {
+	ID         int64
+	ItemID     string
+	EventType  string
+	Source     string
+	View       string
+	OccurredAt string
+}
+
 type ItemSearch struct {
 	ItemID  string
 	Content string
@@ -110,6 +119,13 @@ type ItemTag struct {
 	Tag    string
 }
 
+type ItemTerm struct {
+	ItemID string
+	Kind   string
+	Value  string
+	Weight float64
+}
+
 type PersonalizationRule struct {
 	ID        int64
 	Effect    string
@@ -135,6 +151,7 @@ type RecommendationScore struct {
 	Score         float64
 	InterestScore float64
 	HotScore      float64
+	ReasonJson    sql.NullString
 	ComputedAt    string
 }
 

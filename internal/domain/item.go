@@ -83,10 +83,11 @@ type ItemState struct {
 
 // FeedEntry combines normalized data, source context, and local state for display.
 type FeedEntry struct {
-	Item     FeedItem
-	Sources  []ItemSource
-	State    ItemState
-	HotScore float64
+	Item                  FeedItem
+	Sources               []ItemSource
+	State                 ItemState
+	HotScore              float64
+	RecommendationReasons []RecommendationReason
 }
 
 // PrimarySource returns the highest-ranked source context for this entry.

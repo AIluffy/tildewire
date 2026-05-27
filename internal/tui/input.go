@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -165,25 +164,25 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if !ok {
 			return m, nil
 		}
-		return m, openURLCmd(entry.Item.URL)
+		return m, m.openItemURLCmd(entry)
 	case key.Matches(msg, m.keys.OpenSource):
 		entry, ok := m.selected()
 		if !ok {
 			return m, nil
 		}
-		return m, openURLCmd(entry.Item.CommentsURL)
+		return m, m.openSourceURLCmd(entry)
 	case key.Matches(msg, m.keys.CopyURL):
 		entry, ok := m.selected()
 		if !ok {
 			return m, nil
 		}
-		return m, copyCmd(entry.Item.URL, "copied url")
+		return m, m.copyItemURLCmd(entry)
 	case key.Matches(msg, m.keys.CopyMarkdown):
 		entry, ok := m.selected()
 		if !ok {
 			return m, nil
 		}
-		return m, copyCmd(fmt.Sprintf("[%s](%s)", entry.Item.Title, entry.Item.URL), "copied markdown link")
+		return m, m.copyMarkdownLinkCmd(entry)
 	case key.Matches(msg, m.keys.Health):
 		m.health = true
 		m.detail = false
@@ -271,25 +270,25 @@ func (m Model) handleDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if !ok {
 			return m, nil
 		}
-		return m, openURLCmd(entry.Item.URL)
+		return m, m.openItemURLCmd(entry)
 	case key.Matches(msg, m.keys.OpenSource):
 		entry, ok := m.selected()
 		if !ok {
 			return m, nil
 		}
-		return m, openURLCmd(entry.Item.CommentsURL)
+		return m, m.openSourceURLCmd(entry)
 	case key.Matches(msg, m.keys.CopyURL):
 		entry, ok := m.selected()
 		if !ok {
 			return m, nil
 		}
-		return m, copyCmd(entry.Item.URL, "copied url")
+		return m, m.copyItemURLCmd(entry)
 	case key.Matches(msg, m.keys.CopyMarkdown):
 		entry, ok := m.selected()
 		if !ok {
 			return m, nil
 		}
-		return m, copyCmd(fmt.Sprintf("[%s](%s)", entry.Item.Title, entry.Item.URL), "copied markdown link")
+		return m, m.copyMarkdownLinkCmd(entry)
 	}
 	switch msg.String() {
 	case "j", "down":

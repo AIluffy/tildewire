@@ -68,6 +68,7 @@ type fakeService struct {
 	deletedRuleID       int64
 	ignoredCandidateKey string
 	cacheCleared        bool
+	itemEvents          []domain.ItemEvent
 	enabledSources      []domain.SourceID
 	tokens              map[domain.SourceID]string
 }
@@ -126,6 +127,11 @@ func (f *fakeService) SetHidden(_ context.Context, _ string, hidden bool, _ doma
 	f.snapshot.Entries[0].State.Hidden = hidden
 	f.snapshot.Filter = filter
 	return f.snapshot, nil
+}
+
+func (f *fakeService) RecordItemEvent(_ context.Context, event domain.ItemEvent) error {
+	f.itemEvents = append(f.itemEvents, event)
+	return nil
 }
 
 func (f *fakeService) LoadDetail(context.Context, domain.FeedEntry) (domain.ItemDetail, error) {

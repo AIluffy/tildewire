@@ -207,6 +207,24 @@ func openURLCmd(url string) tea.Cmd {
 	}
 }
 
+func (m Model) openItemURLCmd(entry domain.FeedEntry) tea.Cmd {
+	return m.openEntryURLCmd(entry, entry.Item.URL, domain.ItemEventOpenURL)
+}
+
+func (m Model) openSourceURLCmd(entry domain.FeedEntry) tea.Cmd {
+	return m.openEntryURLCmd(entry, entry.Item.CommentsURL, domain.ItemEventOpenSource)
+}
+
+func (m Model) openEntryURLCmd(entry domain.FeedEntry, url string, eventType domain.ItemEventType) tea.Cmd {
+	return func() tea.Msg {
+		err := openExternalURL(url)
+		if err == nil && strings.TrimSpace(url) != "" {
+			m.recordItemEvent(entry, eventType)
+		}
+		return statusMsg{message: "opened url", err: err}
+	}
+}
+
 func copyCmd(value, message string) tea.Cmd {
 	return copyWithToastCmd(value, message, "")
 }
@@ -225,6 +243,39 @@ func copyWithToastCmd(value, message, toast string) tea.Cmd {
 		}
 		return statusMsg{message: message, toast: toast}
 	}
+}
+
+func (m Model) copyItemURLCmd(entry domain.FeedEntry) tea.Cmd {
+	return m.copyEntryValueCmd(entry, entry.Item.URL, "copied url", "", domain.ItemEventCopyURL)
+}
+
+func (m Model) copyMarkdownLinkCmd(entry domain.FeedEntry) tea.Cmd {
+	value := fmt.Sprintf("[%s](%s)", entry.Item.Title, entry.Item.URL)
+	return m.copyEntryValueCmd(entry, value, "copied markdown link", "", domain.ItemEventCopyMarkdown)
+}
+
+func (m Model) copyEntryValueCmd(entry domain.FeedEntry, value, message, toast string, eventType domain.ItemEventType) tea.Cmd {
+	return func() tea.Msg {
+		if strings.TrimSpace(value) == "" {
+			return statusMsg{message: "nothing to copy", err: nil}
+		}
+		if err := writeClipboard(value); err != nil {
+			return statusMsg{message: "copy failed", err: err}
+		}
+		m.recordItemEvent(entry, eventType)
+		return statusMsg{message: message, toast: toast}
+	}
+}
+
+func (m Model) recordItemEvent(entry domain.FeedEntry, eventType domain.ItemEventType) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = m.service.RecordItemEvent(ctx, domain.ItemEvent{
+		ItemID:    entry.Item.ID,
+		EventType: eventType,
+		Source:    entry.PrimarySource().Source,
+		View:      m.view,
+	})
 }
 
 func clearToastCmd(id int) tea.Cmd {

@@ -59,12 +59,71 @@ type PreferenceProfile struct {
 	HiddenSources   map[string]int
 }
 
+// ItemEventType identifies explicit local user interactions that can train Recommend.
+type ItemEventType string
+
+const (
+	ItemEventSave         ItemEventType = "save"
+	ItemEventUnsave       ItemEventType = "unsave"
+	ItemEventHide         ItemEventType = "hide"
+	ItemEventRestore      ItemEventType = "restore"
+	ItemEventRead         ItemEventType = "read"
+	ItemEventUnread       ItemEventType = "unread"
+	ItemEventDetailOpen   ItemEventType = "detail_open"
+	ItemEventOpenURL      ItemEventType = "open_url"
+	ItemEventOpenSource   ItemEventType = "open_source"
+	ItemEventCopyURL      ItemEventType = "copy_url"
+	ItemEventCopyMarkdown ItemEventType = "copy_markdown"
+)
+
+// ItemEvent is a local, durable recommendation-training interaction.
+type ItemEvent struct {
+	ID         int64
+	ItemID     string
+	EventType  ItemEventType
+	Source     SourceID
+	View       SourceID
+	OccurredAt time.Time
+}
+
+// RecommendationTerm is a normalized item feature used for local recommendation matching.
+type RecommendationTerm struct {
+	ItemID string
+	Kind   string
+	Value  string
+	Weight float64
+}
+
+// RecommendationProfile contains decayed signed preference scores keyed by term.
+type RecommendationProfile struct {
+	Terms map[string]RecommendationProfileTerm
+}
+
+// RecommendationProfileTerm stores positive and negative preference evidence for one term.
+type RecommendationProfileTerm struct {
+	Kind     string
+	Value    string
+	Score    float64
+	Positive float64
+	Negative float64
+	Reasons  []RecommendationReason
+}
+
+// RecommendationReason is a short explainable reason attached to a recommended entry.
+type RecommendationReason struct {
+	Kind   string  `json:"kind"`
+	Value  string  `json:"value"`
+	Label  string  `json:"label"`
+	Weight float64 `json:"weight"`
+}
+
 // RecommendationScore is a durable score for the virtual Recommend view.
 type RecommendationScore struct {
 	ItemID        string
 	Score         float64
 	InterestScore float64
 	HotScore      float64
+	Reasons       []RecommendationReason
 	ComputedAt    time.Time
 }
 

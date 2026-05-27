@@ -6,14 +6,19 @@ import (
 	"strings"
 
 	"github.com/AIluffy/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/recommend"
 )
 
 const (
-	explicitRuleWeight             = 0.50
-	implicitSignalUnit             = 0.04
-	implicitSignalCap              = 0.20
-	recommendationSourceSignalUnit = 0.12
-	recommendationSourceSignalCap  = 0.30
+	explicitRuleWeight              = 0.50
+	recommendationRuleWeight        = 1.00
+	implicitSignalUnit              = 0.04
+	implicitSignalCap               = 0.20
+	recommendationSourceSignalUnit  = 0.12
+	recommendationSourceSignalCap   = 0.30
+	recommendationOtherSignalCap    = 0.75
+	recommendationSourceCap         = 2.00
+	recommendationSourceNegativeCap = 0.50
 )
 
 func filterPersonalizedHidden(entries []domain.FeedEntry, rules []domain.PersonalizationRule) []domain.FeedEntry {
@@ -48,25 +53,67 @@ func personalizationAdjustment(entry domain.FeedEntry, rules []domain.Personaliz
 	return adjustment
 }
 
-func recommendationInterestScore(entry domain.FeedEntry, rules []domain.PersonalizationRule, profile domain.PreferenceProfile) (float64, bool) {
+func recommendationInterestScore(entry domain.FeedEntry, rules []domain.PersonalizationRule, profile domain.RecommendationProfile) (float64, bool, []domain.RecommendationReason) {
 	positive := 0.0
 	negative := 0.0
+	var reasons []domain.RecommendationReason
 	for _, rule := range rules {
 		if !rule.Enabled || !ruleMatchesEntry(rule, entry) {
 			continue
 		}
 		switch rule.Effect {
 		case domain.RuleEffectBoost:
-			positive += explicitRuleWeight
+			positive += recommendationRuleWeight
+			reasons = append(reasons, domain.RecommendationReason{
+				Kind:   "rule",
+				Value:  strings.ToLower(strings.TrimSpace(rule.Value)),
+				Label:  "boost " + strings.ToLower(strings.TrimSpace(rule.Value)),
+				Weight: recommendationRuleWeight + 1,
+			})
 		case domain.RuleEffectMute:
-			negative += explicitRuleWeight
+			negative += recommendationRuleWeight
 		}
 	}
-	positive += implicitPreferenceAdjustment(entry, profile.SavedTags, profile.SavedLanguages, profile.SavedRepos, profile.SavedAuthors, profile.SavedSources)
-	negative += implicitPreferenceAdjustment(entry, profile.HiddenTags, profile.HiddenLanguages, profile.HiddenRepos, profile.HiddenAuthors, profile.HiddenSources)
-	positive += recommendationSourceSignal(entry, profile.SavedSources)
-	negative += recommendationSourceSignal(entry, profile.HiddenSources)
-	return positive - negative, positive > 0
+	profilePositive, profileNegative, profileReasons := recommendationProfileAdjustment(entry, profile)
+	positive += profilePositive
+	negative += profileNegative
+	reasons = append(reasons, profileReasons...)
+	return positive - negative, positive > 0, reasons
+}
+
+func recommendationProfileAdjustment(entry domain.FeedEntry, profile domain.RecommendationProfile) (float64, float64, []domain.RecommendationReason) {
+	if len(profile.Terms) == 0 {
+		return 0, 0, nil
+	}
+	item := entry.Item
+	item.Sources = entry.Sources
+	otherPositive := 0.0
+	sourcePositive := 0.0
+	otherNegative := 0.0
+	sourceNegative := 0.0
+	var reasons []domain.RecommendationReason
+	for _, term := range recommend.TermsForItem(item) {
+		profileTerm, ok := profile.Terms[recommend.TermKey(term.Kind, term.Value)]
+		if !ok {
+			continue
+		}
+		positive := profileTerm.Positive * term.Weight
+		negative := profileTerm.Negative * term.Weight
+		if term.Kind == "source" {
+			sourcePositive += positive
+			sourceNegative += negative
+		} else {
+			otherPositive += positive
+			otherNegative += negative
+		}
+		for _, reason := range profileTerm.Reasons {
+			reason.Weight *= term.Weight
+			reasons = append(reasons, reason)
+		}
+	}
+	positive := math.Min(otherPositive, recommendationOtherSignalCap) + math.Min(sourcePositive, recommendationSourceCap)
+	negative := math.Min(otherNegative, recommendationOtherSignalCap) + math.Min(sourceNegative, recommendationSourceNegativeCap)
+	return positive, negative, recommend.TopReasons(reasons, 4)
 }
 
 func hasMatchingRule(entry domain.FeedEntry, rules []domain.PersonalizationRule, effect domain.RuleEffect) bool {
