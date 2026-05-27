@@ -65,6 +65,21 @@ func (s *Store) ReplaceFeedItemsForSourceView(ctx context.Context, source domain
 	if err := upsertFeedItems(ctx, queries, items, now); err != nil {
 		return err
 	}
+	if err := queries.DeleteUnreferencedUnsavedItemSearch(ctx); err != nil {
+		return err
+	}
+	if err := queries.DeleteUnreferencedUnsavedItemTags(ctx); err != nil {
+		return err
+	}
+	if err := queries.DeleteUnreferencedUnsavedDedupeCandidates(ctx); err != nil {
+		return err
+	}
+	if err := queries.DeleteUnreferencedUnsavedItemStates(ctx); err != nil {
+		return err
+	}
+	if err := queries.DeleteUnreferencedUnsavedItems(ctx); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 

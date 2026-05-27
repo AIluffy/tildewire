@@ -62,6 +62,22 @@ func TestCleanNormalizesMultilineHTMLHeader(t *testing.T) {
 	}
 }
 
+func TestCleanPreservesInlineCodeContainingAngleBrackets(t *testing.T) {
+	cleaned := Clean("Use `<Button />` in JSX and <strong>keep bold text</strong>.")
+
+	if !strings.Contains(cleaned, "`<Button />`") {
+		t.Fatalf("cleaned README removed angle-bracket inline code:\n%s", cleaned)
+	}
+	if !strings.Contains(cleaned, "keep bold text") {
+		t.Fatalf("cleaned README removed HTML text content:\n%s", cleaned)
+	}
+	for _, unwanted := range []string{"<strong>", "</strong>"} {
+		if strings.Contains(cleaned, unwanted) {
+			t.Fatalf("cleaned README leaked %q:\n%s", unwanted, cleaned)
+		}
+	}
+}
+
 func TestImageRefsResolveRelativeRawAsset(t *testing.T) {
 	refs := ImageRefs("![screen](assets/v2-screen.png)", "https://github.com/ruvnet/RuView/blob/main/README.md")
 	if len(refs) != 1 {

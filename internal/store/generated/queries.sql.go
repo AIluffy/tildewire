@@ -66,13 +66,16 @@ SELECT COUNT(*) AS total
 FROM items i
 LEFT JOIN item_state st ON st.item_id = i.id
 WHERE (?1 = 1 OR COALESCE(st.hidden, 0) = 0)
+  AND (?2 <> '' OR ?3 = 1 OR EXISTS (
+    SELECT 1 FROM item_sources any_src WHERE any_src.item_id = i.id
+  ))
   AND (?2 = '' OR EXISTS (
     SELECT 1 FROM item_sources src
     WHERE src.item_id = i.id
       AND src.source = ?2
-      AND (?3 = '' OR lower(src.source_view) = ?3)
+      AND (?4 = '' OR lower(src.source_view) = ?4)
   ))
-  AND (?4 = 0 OR COALESCE(st.saved, 0) = 1)
+  AND (?3 = 0 OR COALESCE(st.saved, 0) = 1)
   AND (?5 = 0 OR COALESCE(st.read, 0) = 0)
   AND (?6 = '' OR lower(COALESCE(i.language, '')) = ?6)
   AND (?7 = '' OR EXISTS (
@@ -90,8 +93,8 @@ WHERE (?1 = 1 OR COALESCE(st.hidden, 0) = 0)
 type CountFeedParams struct {
 	IncludeHidden interface{}
 	Source        interface{}
-	SourceView    interface{}
 	SavedOnly     interface{}
+	SourceView    interface{}
 	UnreadOnly    interface{}
 	Language      interface{}
 	Tag           interface{}
@@ -102,8 +105,8 @@ func (q *Queries) CountFeed(ctx context.Context, arg CountFeedParams) (int64, er
 	row := q.db.QueryRowContext(ctx, countFeed,
 		arg.IncludeHidden,
 		arg.Source,
-		arg.SourceView,
 		arg.SavedOnly,
+		arg.SourceView,
 		arg.UnreadOnly,
 		arg.Language,
 		arg.Tag,
@@ -191,6 +194,101 @@ DELETE FROM personalization_rules WHERE id = ?
 
 func (q *Queries) DeletePersonalizationRule(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deletePersonalizationRule, id)
+	return err
+}
+
+const deleteUnreferencedUnsavedDedupeCandidates = `-- name: DeleteUnreferencedUnsavedDedupeCandidates :exec
+DELETE FROM dedupe_candidates
+WHERE item_id_a IN (
+    SELECT i.id
+    FROM items i
+    WHERE NOT EXISTS (
+        SELECT 1 FROM item_sources src WHERE src.item_id = i.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.saved = 1
+      )
+  )
+  OR item_id_b IN (
+    SELECT i.id
+    FROM items i
+    WHERE NOT EXISTS (
+        SELECT 1 FROM item_sources src WHERE src.item_id = i.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.saved = 1
+      )
+  )
+`
+
+func (q *Queries) DeleteUnreferencedUnsavedDedupeCandidates(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteUnreferencedUnsavedDedupeCandidates)
+	return err
+}
+
+const deleteUnreferencedUnsavedItemSearch = `-- name: DeleteUnreferencedUnsavedItemSearch :exec
+DELETE FROM item_search
+WHERE item_id IN (
+  SELECT i.id
+  FROM items i
+  WHERE NOT EXISTS (
+      SELECT 1 FROM item_sources src WHERE src.item_id = i.id
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.saved = 1
+    )
+)
+`
+
+func (q *Queries) DeleteUnreferencedUnsavedItemSearch(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteUnreferencedUnsavedItemSearch)
+	return err
+}
+
+const deleteUnreferencedUnsavedItemStates = `-- name: DeleteUnreferencedUnsavedItemStates :exec
+DELETE FROM item_state
+WHERE saved = 0
+  AND NOT EXISTS (
+    SELECT 1 FROM item_sources src WHERE src.item_id = item_state.item_id
+  )
+`
+
+func (q *Queries) DeleteUnreferencedUnsavedItemStates(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteUnreferencedUnsavedItemStates)
+	return err
+}
+
+const deleteUnreferencedUnsavedItemTags = `-- name: DeleteUnreferencedUnsavedItemTags :exec
+DELETE FROM item_tags
+WHERE item_id IN (
+  SELECT i.id
+  FROM items i
+  WHERE NOT EXISTS (
+      SELECT 1 FROM item_sources src WHERE src.item_id = i.id
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.saved = 1
+    )
+)
+`
+
+func (q *Queries) DeleteUnreferencedUnsavedItemTags(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteUnreferencedUnsavedItemTags)
+	return err
+}
+
+const deleteUnreferencedUnsavedItems = `-- name: DeleteUnreferencedUnsavedItems :exec
+DELETE FROM items
+WHERE NOT EXISTS (
+    SELECT 1 FROM item_sources src WHERE src.item_id = items.id
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM item_state st WHERE st.item_id = items.id AND st.saved = 1
+  )
+`
+
+func (q *Queries) DeleteUnreferencedUnsavedItems(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteUnreferencedUnsavedItems)
 	return err
 }
 
@@ -585,13 +683,16 @@ SELECT i.id, i.canonical_key, i.title, i.subtitle, i.summary, i.url, i.canonical
 FROM items i
 LEFT JOIN item_state st ON st.item_id = i.id
 WHERE (?1 = 1 OR COALESCE(st.hidden, 0) = 0)
+  AND (?2 <> '' OR ?3 = 1 OR EXISTS (
+    SELECT 1 FROM item_sources any_src WHERE any_src.item_id = i.id
+  ))
   AND (?2 = '' OR EXISTS (
     SELECT 1 FROM item_sources src
     WHERE src.item_id = i.id
       AND src.source = ?2
-      AND (?3 = '' OR lower(src.source_view) = ?3)
+      AND (?4 = '' OR lower(src.source_view) = ?4)
   ))
-  AND (?4 = 0 OR COALESCE(st.saved, 0) = 1)
+  AND (?3 = 0 OR COALESCE(st.saved, 0) = 1)
   AND (?5 = 0 OR COALESCE(st.read, 0) = 0)
   AND (?6 = '' OR lower(COALESCE(i.language, '')) = ?6)
   AND (?7 = '' OR EXISTS (
@@ -611,8 +712,8 @@ LIMIT ?9
 type ListFeedParams struct {
 	IncludeHidden interface{}
 	Source        interface{}
-	SourceView    interface{}
 	SavedOnly     interface{}
+	SourceView    interface{}
 	UnreadOnly    interface{}
 	Language      interface{}
 	Tag           interface{}
@@ -655,8 +756,8 @@ func (q *Queries) ListFeed(ctx context.Context, arg ListFeedParams) ([]ListFeedR
 	rows, err := q.db.QueryContext(ctx, listFeed,
 		arg.IncludeHidden,
 		arg.Source,
-		arg.SourceView,
 		arg.SavedOnly,
+		arg.SourceView,
 		arg.UnreadOnly,
 		arg.Language,
 		arg.Tag,

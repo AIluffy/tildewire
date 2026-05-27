@@ -7,6 +7,9 @@ SELECT i.id, i.canonical_key, i.title, i.subtitle, i.summary, i.url, i.canonical
 FROM items i
 LEFT JOIN item_state st ON st.item_id = i.id
 WHERE (sqlc.arg(include_hidden) = 1 OR COALESCE(st.hidden, 0) = 0)
+  AND (sqlc.arg(source) <> '' OR sqlc.arg(saved_only) = 1 OR EXISTS (
+    SELECT 1 FROM item_sources any_src WHERE any_src.item_id = i.id
+  ))
   AND (sqlc.arg(source) = '' OR EXISTS (
     SELECT 1 FROM item_sources src
     WHERE src.item_id = i.id
@@ -34,6 +37,9 @@ SELECT COUNT(*) AS total
 FROM items i
 LEFT JOIN item_state st ON st.item_id = i.id
 WHERE (sqlc.arg(include_hidden) = 1 OR COALESCE(st.hidden, 0) = 0)
+  AND (sqlc.arg(source) <> '' OR sqlc.arg(saved_only) = 1 OR EXISTS (
+    SELECT 1 FROM item_sources any_src WHERE any_src.item_id = i.id
+  ))
   AND (sqlc.arg(source) = '' OR EXISTS (
     SELECT 1 FROM item_sources src
     WHERE src.item_id = i.id
@@ -108,6 +114,71 @@ ON CONFLICT(source, source_view, source_id) DO UPDATE SET
 DELETE FROM item_sources
 WHERE source = ?
   AND lower(source_view) = ?;
+
+-- name: DeleteUnreferencedUnsavedItemSearch :exec
+DELETE FROM item_search
+WHERE item_id IN (
+  SELECT i.id
+  FROM items i
+  WHERE NOT EXISTS (
+      SELECT 1 FROM item_sources src WHERE src.item_id = i.id
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.saved = 1
+    )
+);
+
+-- name: DeleteUnreferencedUnsavedItemTags :exec
+DELETE FROM item_tags
+WHERE item_id IN (
+  SELECT i.id
+  FROM items i
+  WHERE NOT EXISTS (
+      SELECT 1 FROM item_sources src WHERE src.item_id = i.id
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.saved = 1
+    )
+);
+
+-- name: DeleteUnreferencedUnsavedDedupeCandidates :exec
+DELETE FROM dedupe_candidates
+WHERE item_id_a IN (
+    SELECT i.id
+    FROM items i
+    WHERE NOT EXISTS (
+        SELECT 1 FROM item_sources src WHERE src.item_id = i.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.saved = 1
+      )
+  )
+  OR item_id_b IN (
+    SELECT i.id
+    FROM items i
+    WHERE NOT EXISTS (
+        SELECT 1 FROM item_sources src WHERE src.item_id = i.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.saved = 1
+      )
+  );
+
+-- name: DeleteUnreferencedUnsavedItemStates :exec
+DELETE FROM item_state
+WHERE saved = 0
+  AND NOT EXISTS (
+    SELECT 1 FROM item_sources src WHERE src.item_id = item_state.item_id
+  );
+
+-- name: DeleteUnreferencedUnsavedItems :exec
+DELETE FROM items
+WHERE NOT EXISTS (
+    SELECT 1 FROM item_sources src WHERE src.item_id = items.id
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM item_state st WHERE st.item_id = items.id AND st.saved = 1
+  );
 
 -- name: ListItemSources :many
 SELECT source, source_view, source_id, source_rank, COALESCE(source_url, '') AS source_url,

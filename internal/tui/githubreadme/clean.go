@@ -147,9 +147,57 @@ func markdownImageAlt(alt string) string {
 }
 
 func stripInlineHTML(line string) string {
-	line = htmlBreakTagPattern.ReplaceAllString(line, " ")
-	line = htmlTagPattern.ReplaceAllString(line, "")
-	return strings.TrimSpace(line)
+	segments := splitInlineCodeSpans(line)
+	var cleaned strings.Builder
+	for _, segment := range segments {
+		if segment.code {
+			cleaned.WriteString(segment.text)
+			continue
+		}
+		text := htmlBreakTagPattern.ReplaceAllString(segment.text, " ")
+		text = htmlTagPattern.ReplaceAllString(text, "")
+		cleaned.WriteString(text)
+	}
+	return strings.TrimSpace(cleaned.String())
+}
+
+type inlineCodeSpan struct {
+	text string
+	code bool
+}
+
+func splitInlineCodeSpans(line string) []inlineCodeSpan {
+	segments := make([]inlineCodeSpan, 0, 1)
+	for len(line) > 0 {
+		start := strings.IndexByte(line, '`')
+		if start < 0 {
+			segments = append(segments, inlineCodeSpan{text: line})
+			break
+		}
+		if start > 0 {
+			segments = append(segments, inlineCodeSpan{text: line[:start]})
+		}
+		fenceLen := countLeadingBackticks(line[start:])
+		fence := strings.Repeat("`", fenceLen)
+		searchStart := start + fenceLen
+		endOffset := strings.Index(line[searchStart:], fence)
+		if endOffset < 0 {
+			segments = append(segments, inlineCodeSpan{text: line[start:]})
+			break
+		}
+		end := searchStart + endOffset + fenceLen
+		segments = append(segments, inlineCodeSpan{text: line[start:end], code: true})
+		line = line[end:]
+	}
+	return segments
+}
+
+func countLeadingBackticks(value string) int {
+	count := 0
+	for count < len(value) && value[count] == '`' {
+		count++
+	}
+	return count
 }
 
 func expandInlineBlockquoteTableLine(line string) []string {

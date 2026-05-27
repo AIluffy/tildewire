@@ -1000,6 +1000,73 @@ func TestRefreshReplacesSourceViewWindowInsteadOfAccumulatingHistory(t *testing.
 	}
 }
 
+func TestRefreshReplacementDoesNotLetOrphanedItemsOccupyAllFeedPage(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+	now := time.Date(2026, 5, 10, 10, 0, 0, 0, time.UTC)
+	githubItems := make([]domain.FeedItem, 0, 20)
+	for idx := 1; idx <= 20; idx++ {
+		id := fmt.Sprintf("gh-%03d", idx)
+		githubItems = append(githubItems, appTestSourceItem(id, "repo:owner/"+id, "owner/"+id, domain.SourceGitHub, idx, now.Add(-time.Hour)))
+	}
+	if err := db.UpsertFeedItems(ctx, githubItems); err != nil {
+		t.Fatal(err)
+	}
+	hnItems := make([]domain.FeedItem, 0, 260)
+	for idx := 1; idx <= 260; idx++ {
+		id := fmt.Sprintf("hn-old-%03d", idx)
+		hnItems = append(hnItems, appTestSourceItem(id, "hackernews:"+id, "Old HN "+id, domain.SourceHackerNews, idx, now.Add(time.Duration(idx)*time.Second)))
+	}
+	adapter := &fakeAdapter{
+		source: domain.SourceHackerNews,
+		scopes: []domain.FetchScope{{Source: domain.SourceHackerNews, View: "top"}},
+		items:  hnItems,
+	}
+	service := NewService(db, httpx.New(time.Second), []SourceAdapter{adapter})
+
+	if _, err := service.Refresh(ctx, domain.SourceHackerNews, FeedFilter{}, RefreshOptions{Mode: RefreshModeVisible}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetSaved(ctx, hnItems[0].ID, true); err != nil {
+		t.Fatal(err)
+	}
+
+	adapter.items = []domain.FeedItem{
+		appTestSourceItem("hn-new-1", "hackernews:new-1", "New HN one", domain.SourceHackerNews, 1, now.Add(2*time.Hour)),
+		appTestSourceItem("hn-new-2", "hackernews:new-2", "New HN two", domain.SourceHackerNews, 2, now.Add(2*time.Hour+time.Second)),
+	}
+	if _, err := service.Refresh(ctx, domain.SourceHackerNews, FeedFilter{}, RefreshOptions{Mode: RefreshModeVisible}); err != nil {
+		t.Fatal(err)
+	}
+
+	all, err := service.LoadFeed(ctx, domain.SourceAll, FeedFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all.Entries) != 22 {
+		t.Fatalf("all entries = %d, want current HN window plus GitHub items", len(all.Entries))
+	}
+	if !snapshotHasSource(all, domain.SourceGitHub) {
+		t.Fatalf("all feed lost GitHub items after HN window replacement: %+v", all.Entries)
+	}
+	for _, entry := range all.Entries {
+		if strings.HasPrefix(entry.Item.ID, "hn-old-") {
+			t.Fatalf("all feed leaked orphaned old HN item: %+v", entry)
+		}
+	}
+	if all.Counts[domain.SourceAll] != 22 || all.Counts[domain.SourceHackerNews] != 2 || all.Counts[domain.SourceGitHub] != 20 {
+		t.Fatalf("counts = %+v, want all=22 hn=2 github=20", all.Counts)
+	}
+	exported, err := service.ExportSaved(ctx, ExportOptions{Format: ExportJSON, Dir: t.TempDir(), Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exported.Count != 1 {
+		t.Fatalf("exported saved count = %d, want saved orphan preserved", exported.Count)
+	}
+}
+
 func TestLoadFeedIncludesGitHubAndSourceCounts(t *testing.T) {
 	ctx := context.Background()
 	db := openAppTestStore(t)
