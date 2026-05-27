@@ -77,10 +77,5 @@ func entryUsesDetailSource(entry domain.FeedEntry, source domain.SourceID) bool 
 			return true
 		}
 	}
-	for _, itemSource := range entry.Item.Sources {
-		if itemSource.Source == source {
-			return true
-		}
-	}
 	return false
 }

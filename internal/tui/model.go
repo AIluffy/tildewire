@@ -137,191 +137,249 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.help.SetWidth(msg.Width)
-		m.clampFeedOffset()
-		m.clampSourcesOffset()
-		m.clampPreviewOffset()
-		m.clampDetailOffset()
-		imageCmd := m.queueDetailImagePreviewCmds()
-		if m.images != nil {
-			imageCmd = batchCommands(imageCmd, m.images.OnResize(msg.Width, msg.Height))
-		}
-		if m.ruleForm != nil {
-			m.ruleForm.WithWidth(max(40, msg.Width-4)).WithHeight(max(8, msg.Height-4))
-			updated, cmd := m.ruleForm.Update(msg)
-			if form, ok := updated.(*huh.Form); ok {
-				m.ruleForm = form
-			}
-			return m, cmd
-		}
-		return m, batchCommands(imageCmd, m.drawDetailRawImagesCmd())
+		return m.handleWindowSizeMsg(msg)
 	case tuiimage.RenderedMsg:
-		if m.images != nil {
-			m.images.Accept(msg)
-		}
-		return m, nil
+		return m.handleRenderedImageMsg(msg)
 	case snapshotMsg:
-		if msg.refreshID != 0 && msg.refreshID != m.refreshID {
-			m.applyBackgroundSnapshot(msg.snapshot)
-			return m, nil
-		}
-		if msg.searchLoadID != 0 && msg.searchLoadID != m.searchLoadID {
-			return m, nil
-		}
-		m.refreshing = false
-		m.applySnapshot(msg.snapshot)
-		m.lastError = ""
-		m.message = msg.message
-		if msg.err != nil {
-			m.lastError = msg.err.Error()
-			m.message = "using cached data; press r to retry"
-		}
-		if msg.nextRefresh != nil {
-			m.refreshing = true
-			m.refreshID++
-			if msg.err == nil {
-				m.message = msg.message + "; refreshing visible scope"
-			}
-			return m, m.refreshWithProgressCmd(m.refreshID, msg.nextRefresh.force, msg.nextRefresh.mode)
-		}
-		return m, nil
+		return m.handleSnapshotMsg(msg)
 	case refreshProgressMsg:
-		if msg.refreshID != m.refreshID {
-			if msg.err == nil {
-				m.applyBackgroundSnapshot(msg.snapshot)
-			}
-			return m, nil
-		}
-		if !m.refreshing {
-			return m, nil
-		}
-		if msg.err == nil {
-			m.applySnapshot(msg.snapshot)
-		}
-		return m, m.refreshProgressCmd(m.refreshID)
+		return m.handleRefreshProgressMsg(msg)
 	case spinner.TickMsg:
-		if !m.refreshing && !m.detailLoading {
-			return m, nil
-		}
-		var cmd tea.Cmd
-		m.loadingSpinner, cmd = m.loadingSpinner.Update(msg)
-		if m.detailLoading {
-			m.clearDetailContentCache()
-		}
-		return m, cmd
+		return m.handleSpinnerTickMsg(msg)
 	case detailMsg:
-		if msg.itemID == m.detailEntryID {
-			m.clearDetailContentCache()
-			m.detailLoading = false
-			m.itemDetail = msg.detail
-			m.detailError = ""
-			if msg.err != nil {
-				m.detailError = msg.err.Error()
-				m.message = "detail loaded with errors"
-			} else {
-				m.message = "detail loaded"
-			}
-			m.refreshDetailContentCache()
-			m.clampDetailOffset()
-			return m, batchCommands(m.queueDetailImagePreviewCmds(), m.drawDetailRawImagesCmd())
-		}
-		return m, nil
+		return m.handleDetailMsg(msg)
 	case markdownImagePreviewMsg:
-		if msg.itemID != m.detailEntryID {
-			return m, nil
-		}
-		state := m.imagePreviews[msg.key]
-		state.Loading = false
-		if msg.err != nil {
-			state.Err = msg.err.Error()
-			m.message = "image preview unavailable"
-		} else {
-			state.Content = msg.result.Content
-			state.Backend = msg.result.Backend
-			state.Raw = msg.result.Raw
-			state.Columns = msg.result.Columns
-			state.Rows = msg.result.Rows
-			m.message = "image preview loaded"
-		}
-		if m.imagePreviews == nil {
-			m.imagePreviews = make(map[markdownImagePreviewKey]markdownImagePreviewState)
-		}
-		m.imagePreviews[msg.key] = state
-		m.detailImageVersion++
-		m.clearDetailContentCache()
-		m.refreshDetailContentCache()
-		m.clampDetailOffset()
-		return m, m.drawDetailRawImagesCmd()
+		return m.handleMarkdownImagePreviewMsg(msg)
 	case recommendDiagnosticsMsg:
-		m.recommendDiagnosticsLoading = false
-		if msg.err != nil {
-			m.recommendDiagnostics = domain.RecommendationDiagnostics{}
-			m.recommendDiagnosticsError = msg.err.Error()
-			m.message = "recommend diagnostics unavailable"
-			return m, nil
-		}
-		m.recommendDiagnostics = msg.diagnostics
-		m.recommendDiagnosticsError = ""
-		m.message = "recommend diagnostics"
-		return m, nil
+		return m.handleRecommendDiagnosticsMsg(msg)
 	case detailRawImageRedrawMsg:
-		if msg.drawID != m.detailRawImageDrawID ||
-			msg.itemID != m.detailEntryID ||
-			msg.detailOffset != m.detailOffset ||
-			msg.imageVersion != m.detailImageVersion {
-			return m, nil
-		}
-		return m, m.drawDetailRawImagesCmd()
+		return m.handleDetailRawImageRedrawMsg(msg)
 	case statusMsg:
-		if msg.err != nil {
-			m.lastError = msg.err.Error()
-			m.message = msg.message
-		} else {
-			m.lastError = ""
-			m.message = msg.message
-		}
-		if msg.toast != "" && msg.err == nil {
-			m.toast = msg.toast
-			m.toastID++
-			return m, clearToastCmd(m.toastID)
-		}
-		return m, nil
+		return m.handleStatusMsg(msg)
 	case clearToastMsg:
-		if int(msg) == m.toastID {
-			m.toast = ""
-		}
-		return m, nil
+		return m.handleClearToastMsg(msg)
 	case tea.BackgroundColorMsg:
-		m.darkBackground = msg.IsDark()
-		m.terminalBackground = msg.Color
-		m.clearDetailContentCache()
-		m.refreshDetailContentCache()
-		m.clampDetailOffset()
-		return m, nil
+		return m.handleBackgroundColorMsg(msg)
 	case tea.MouseClickMsg:
-		if m.settingsOpen {
-			return m.handleSettingsMouseClick(msg)
-		}
-		if m.detail {
-			return m.handleDetailMouseClick(msg)
-		}
-		if m.mainPanelsVisible() {
-			return m.handleMouseClick(msg)
-		}
+		return m.handleMouseClickMsg(msg)
 	case tea.MouseWheelMsg:
-		if m.detail {
-			return m.handleDetailMouseWheel(msg)
-		}
-		if m.mainPanelsVisible() {
-			return m.handleMouseWheel(msg)
-		}
+		return m.handleMouseWheelMsg(msg)
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
 	if m.ruleForm != nil {
 		return m.updateRuleForm(msg)
+	}
+	return m, nil
+}
+
+func (m Model) handleWindowSizeMsg(msg tea.WindowSizeMsg) (Model, tea.Cmd) {
+	m.width = msg.Width
+	m.height = msg.Height
+	m.help.SetWidth(msg.Width)
+	m.clampFeedOffset()
+	m.clampSourcesOffset()
+	m.clampPreviewOffset()
+	m.clampDetailOffset()
+	imageCmd := m.queueDetailImagePreviewCmds()
+	if m.images != nil {
+		imageCmd = batchCommands(imageCmd, m.images.OnResize(msg.Width, msg.Height))
+	}
+	if m.ruleForm != nil {
+		m.ruleForm.WithWidth(max(40, msg.Width-4)).WithHeight(max(8, msg.Height-4))
+		updated, cmd := m.ruleForm.Update(msg)
+		if form, ok := updated.(*huh.Form); ok {
+			m.ruleForm = form
+		}
+		return m, cmd
+	}
+	return m, batchCommands(imageCmd, m.drawDetailRawImagesCmd())
+}
+
+func (m Model) handleRenderedImageMsg(msg tuiimage.RenderedMsg) (Model, tea.Cmd) {
+	if m.images != nil {
+		m.images.Accept(msg)
+	}
+	return m, nil
+}
+
+func (m Model) handleSnapshotMsg(msg snapshotMsg) (Model, tea.Cmd) {
+	if msg.refreshID != 0 && msg.refreshID != m.refreshID {
+		m.applyBackgroundSnapshot(msg.snapshot)
+		return m, nil
+	}
+	if msg.searchLoadID != 0 && msg.searchLoadID != m.searchLoadID {
+		return m, nil
+	}
+	m.refreshing = false
+	m.applySnapshot(msg.snapshot)
+	m.lastError = ""
+	m.message = msg.message
+	if msg.err != nil {
+		m.lastError = msg.err.Error()
+		m.message = "using cached data; press r to retry"
+	}
+	if msg.nextRefresh != nil {
+		m.refreshing = true
+		m.refreshID++
+		if msg.err == nil {
+			m.message = msg.message + "; refreshing visible scope"
+		}
+		return m, m.refreshWithProgressCmd(m.refreshID, msg.nextRefresh.force, msg.nextRefresh.mode)
+	}
+	return m, nil
+}
+
+func (m Model) handleRefreshProgressMsg(msg refreshProgressMsg) (Model, tea.Cmd) {
+	if msg.refreshID != m.refreshID {
+		if msg.err == nil {
+			m.applyBackgroundSnapshot(msg.snapshot)
+		}
+		return m, nil
+	}
+	if !m.refreshing {
+		return m, nil
+	}
+	if msg.err == nil {
+		m.applySnapshot(msg.snapshot)
+	}
+	return m, m.refreshProgressCmd(m.refreshID)
+}
+
+func (m Model) handleSpinnerTickMsg(msg spinner.TickMsg) (Model, tea.Cmd) {
+	if !m.refreshing && !m.detailLoading {
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.loadingSpinner, cmd = m.loadingSpinner.Update(msg)
+	if m.detailLoading {
+		m.clearDetailContentCache()
+	}
+	return m, cmd
+}
+
+func (m Model) handleDetailMsg(msg detailMsg) (Model, tea.Cmd) {
+	if msg.itemID != m.detailEntryID {
+		return m, nil
+	}
+	m.clearDetailContentCache()
+	m.detailLoading = false
+	m.itemDetail = msg.detail
+	m.detailError = ""
+	if msg.err != nil {
+		m.detailError = msg.err.Error()
+		m.message = "detail loaded with errors"
+	} else {
+		m.message = "detail loaded"
+	}
+	m.refreshDetailContentCache()
+	m.clampDetailOffset()
+	return m, batchCommands(m.queueDetailImagePreviewCmds(), m.drawDetailRawImagesCmd())
+}
+
+func (m Model) handleMarkdownImagePreviewMsg(msg markdownImagePreviewMsg) (Model, tea.Cmd) {
+	if msg.itemID != m.detailEntryID {
+		return m, nil
+	}
+	state := m.imagePreviews[msg.key]
+	state.Loading = false
+	if msg.err != nil {
+		state.Err = msg.err.Error()
+		m.message = "image preview unavailable"
+	} else {
+		state.Content = msg.result.Content
+		state.Backend = msg.result.Backend
+		state.Raw = msg.result.Raw
+		state.Columns = msg.result.Columns
+		state.Rows = msg.result.Rows
+		m.message = "image preview loaded"
+	}
+	if m.imagePreviews == nil {
+		m.imagePreviews = make(map[markdownImagePreviewKey]markdownImagePreviewState)
+	}
+	m.imagePreviews[msg.key] = state
+	m.detailImageVersion++
+	m.clearDetailContentCache()
+	m.refreshDetailContentCache()
+	m.clampDetailOffset()
+	return m, m.drawDetailRawImagesCmd()
+}
+
+func (m Model) handleRecommendDiagnosticsMsg(msg recommendDiagnosticsMsg) (Model, tea.Cmd) {
+	m.recommendDiagnosticsLoading = false
+	if msg.err != nil {
+		m.recommendDiagnostics = domain.RecommendationDiagnostics{}
+		m.recommendDiagnosticsError = msg.err.Error()
+		m.message = "recommend diagnostics unavailable"
+		return m, nil
+	}
+	m.recommendDiagnostics = msg.diagnostics
+	m.recommendDiagnosticsError = ""
+	m.message = "recommend diagnostics"
+	return m, nil
+}
+
+func (m Model) handleDetailRawImageRedrawMsg(msg detailRawImageRedrawMsg) (Model, tea.Cmd) {
+	if msg.drawID != m.detailRawImageDrawID ||
+		msg.itemID != m.detailEntryID ||
+		msg.detailOffset != m.detailOffset ||
+		msg.imageVersion != m.detailImageVersion {
+		return m, nil
+	}
+	return m, m.drawDetailRawImagesCmd()
+}
+
+func (m Model) handleStatusMsg(msg statusMsg) (Model, tea.Cmd) {
+	if msg.err != nil {
+		m.lastError = msg.err.Error()
+		m.message = msg.message
+	} else {
+		m.lastError = ""
+		m.message = msg.message
+	}
+	if msg.toast != "" && msg.err == nil {
+		m.toast = msg.toast
+		m.toastID++
+		return m, clearToastCmd(m.toastID)
+	}
+	return m, nil
+}
+
+func (m Model) handleClearToastMsg(msg clearToastMsg) (Model, tea.Cmd) {
+	if int(msg) == m.toastID {
+		m.toast = ""
+	}
+	return m, nil
+}
+
+func (m Model) handleBackgroundColorMsg(msg tea.BackgroundColorMsg) (Model, tea.Cmd) {
+	m.darkBackground = msg.IsDark()
+	m.terminalBackground = msg.Color
+	m.clearDetailContentCache()
+	m.refreshDetailContentCache()
+	m.clampDetailOffset()
+	return m, nil
+}
+
+func (m Model) handleMouseClickMsg(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
+	if m.settingsOpen {
+		return m.handleSettingsMouseClick(msg)
+	}
+	if m.detail {
+		return m.handleDetailMouseClick(msg)
+	}
+	if m.mainPanelsVisible() {
+		return m.handleMouseClick(msg)
+	}
+	return m, nil
+}
+
+func (m Model) handleMouseWheelMsg(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
+	if m.detail {
+		return m.handleDetailMouseWheel(msg)
+	}
+	if m.mainPanelsVisible() {
+		return m.handleMouseWheel(msg)
 	}
 	return m, nil
 }

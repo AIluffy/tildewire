@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/AIluffy/tildewire/internal/domain"
+	"github.com/AIluffy/tildewire/internal/normalize"
 )
 
 // SourceView describes one selectable source-native feed slice.
@@ -21,23 +22,35 @@ type SourceCatalogEntry struct {
 	Badge      string
 }
 
+var sourceCatalog = []SourceCatalogEntry{
+	{Source: domain.SourceGitHub, Label: "GitHub", ShortLabel: "GH", Badge: "GH"},
+	{Source: domain.SourceHackerNews, Label: "Hacker News", ShortLabel: "HN", Badge: "HN"},
+	{Source: domain.SourceAILabs, Label: "AI Labs", ShortLabel: "AI", Badge: "AI"},
+	{Source: domain.SourceHuggingFace, Label: "HF Papers", ShortLabel: "HF", Badge: "HF"},
+	{Source: domain.SourceLobsters, Label: "Lobsters", ShortLabel: "LOB", Badge: "LB"},
+	{Source: domain.SourceProductHunt, Label: "Product Hunt", ShortLabel: "PH", Badge: "PH"},
+}
+
+var sourceCatalogByID = map[domain.SourceID]SourceCatalogEntry{
+	domain.SourceGitHub:      sourceCatalog[0],
+	domain.SourceHackerNews:  sourceCatalog[1],
+	domain.SourceAILabs:      sourceCatalog[2],
+	domain.SourceHuggingFace: sourceCatalog[3],
+	domain.SourceLobsters:    sourceCatalog[4],
+	domain.SourceProductHunt: sourceCatalog[5],
+}
+
 // SourceCatalog returns the supported sources in TUI display order.
 func SourceCatalog() []SourceCatalogEntry {
-	return []SourceCatalogEntry{
-		{Source: domain.SourceGitHub, Label: "GitHub", ShortLabel: "GH", Badge: "GH"},
-		{Source: domain.SourceHackerNews, Label: "Hacker News", ShortLabel: "HN", Badge: "HN"},
-		{Source: domain.SourceAILabs, Label: "AI Labs", ShortLabel: "AI", Badge: "AI"},
-		{Source: domain.SourceHuggingFace, Label: "HF Papers", ShortLabel: "HF", Badge: "HF"},
-		{Source: domain.SourceLobsters, Label: "Lobsters", ShortLabel: "LOB", Badge: "LB"},
-		{Source: domain.SourceProductHunt, Label: "Product Hunt", ShortLabel: "PH", Badge: "PH"},
-	}
+	catalog := make([]SourceCatalogEntry, len(sourceCatalog))
+	copy(catalog, sourceCatalog)
+	return catalog
 }
 
 // SourceIDs returns the supported source ids in display order.
 func SourceIDs() []domain.SourceID {
-	catalog := SourceCatalog()
-	sources := make([]domain.SourceID, 0, len(catalog))
-	for _, entry := range catalog {
+	sources := make([]domain.SourceID, 0, len(sourceCatalog))
+	for _, entry := range sourceCatalog {
 		sources = append(sources, entry.Source)
 	}
 	return sources
@@ -48,10 +61,8 @@ func SourceLabel(source domain.SourceID) string {
 	if source == domain.SourceRecommend {
 		return "Recommend"
 	}
-	for _, entry := range SourceCatalog() {
-		if entry.Source == source {
-			return entry.Label
-		}
+	if entry, ok := sourceCatalogByID[source]; ok {
+		return entry.Label
 	}
 	return string(source)
 }
@@ -61,10 +72,8 @@ func SourceShortLabel(source domain.SourceID) string {
 	if source == domain.SourceRecommend {
 		return "REC"
 	}
-	for _, entry := range SourceCatalog() {
-		if entry.Source == source {
-			return entry.ShortLabel
-		}
+	if entry, ok := sourceCatalogByID[source]; ok {
+		return entry.ShortLabel
 	}
 	return string(source)
 }
@@ -74,10 +83,8 @@ func SourceBadge(source domain.SourceID) string {
 	if source == domain.SourceRecommend {
 		return "RC"
 	}
-	for _, entry := range SourceCatalog() {
-		if entry.Source == source {
-			return entry.Badge
-		}
+	if entry, ok := sourceCatalogByID[source]; ok {
+		return entry.Badge
 	}
 	return "--"
 }
@@ -200,7 +207,7 @@ func sourceViewKey(scope domain.FetchScope) string {
 
 // GitHubScopeView returns the stable source view key for a GitHub Trending scope.
 func GitHubScopeView(scope domain.FetchScope) string {
-	scope = normalizeGitHubScope(scope)
+	scope = normalize.NormalizeGitHubScope(scope)
 	parts := []string{"trending", scope.Period}
 	if scope.Language != "" {
 		parts = append(parts, scope.Language)
@@ -212,7 +219,7 @@ func GitHubScopeView(scope domain.FetchScope) string {
 }
 
 func githubSourceView(scope domain.FetchScope) SourceView {
-	scope = normalizeGitHubScope(scope)
+	scope = normalize.NormalizeGitHubScope(scope)
 	return SourceView{
 		View:  GitHubScopeView(scope),
 		Label: githubScopeLabel(scope),
@@ -230,7 +237,7 @@ func githubScopeForView(view string) domain.FetchScope {
 		return scope
 	}
 	if len(parts) > 1 {
-		scope.Period = normalizeGitHubPeriod(parts[1])
+		scope.Period = normalize.NormalizeGitHubPeriod(parts[1])
 	}
 	for idx := 2; idx < len(parts); idx++ {
 		if parts[idx] == "spoken" && idx+1 < len(parts) {
@@ -242,23 +249,11 @@ func githubScopeForView(view string) domain.FetchScope {
 			scope.Language = normalizeGitHubLanguage(parts[idx])
 		}
 	}
-	return normalizeGitHubScope(scope)
-}
-
-func normalizeGitHubScope(scope domain.FetchScope) domain.FetchScope {
-	scope.Source = domain.SourceGitHub
-	scope.View = "trending"
-	scope.Period = normalizeGitHubPeriod(scope.Period)
-	scope.Language = normalizeGitHubLanguage(scope.Language)
-	scope.SpokenLanguageCode = normalizeGitHubSpokenLanguageCode(scope.SpokenLanguageCode)
-	if scope.Limit <= 0 {
-		scope.Limit = 25
-	}
-	return scope
+	return normalize.NormalizeGitHubScope(scope)
 }
 
 func githubScopeLabel(scope domain.FetchScope) string {
-	scope = normalizeGitHubScope(scope)
+	scope = normalize.NormalizeGitHubScope(scope)
 	parts := []string{"GitHub"}
 	if scope.Language != "" {
 		parts = append(parts, GitHubScopeOptionLabel(GitHubScopeLanguage, scope.Language))

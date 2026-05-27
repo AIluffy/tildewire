@@ -66,7 +66,7 @@ func (a GitHubTrendingAdapter) DefaultScopes() []domain.FetchScope {
 
 // Fetch downloads one GitHub Trending HTML page.
 func (a GitHubTrendingAdapter) Fetch(ctx context.Context, scope domain.FetchScope, client httpx.Requester) (*domain.FetchResult, error) {
-	scope = normalizeGitHubScope(scope)
+	scope = normalize.NormalizeGitHubScope(scope)
 	resp, err := client.DoGET(ctx, httpx.GetOptions{
 		Source:       string(domain.SourceGitHub),
 		URL:          a.trendingURL(scope),
@@ -93,7 +93,7 @@ func (a GitHubTrendingAdapter) Normalize(_ context.Context, scope domain.FetchSc
 	if raw == nil {
 		return nil, fmt.Errorf("github raw response is nil")
 	}
-	scope = normalizeGitHubScope(scope)
+	scope = normalize.NormalizeGitHubScope(scope)
 	items, err := parseGitHubTrending(raw.Body, scope, raw.FetchedAt, a.baseURL())
 	if err != nil {
 		return nil, err
@@ -152,7 +152,7 @@ func (a GitHubTrendingAdapter) Detail(ctx context.Context, entry domain.FeedEntr
 }
 
 func (a GitHubTrendingAdapter) trendingURL(scope domain.FetchScope) string {
-	scope = normalizeGitHubScope(scope)
+	scope = normalize.NormalizeGitHubScope(scope)
 	path := "/trending"
 	if scope.Language != "" {
 		path += "/" + scope.Language
@@ -215,31 +215,12 @@ func decodeGitHubReadme(payload githubReadmePayload) (string, error) {
 	return strings.TrimSpace(string(data)), nil
 }
 
-func normalizeGitHubScope(scope domain.FetchScope) domain.FetchScope {
-	scope.Source = domain.SourceGitHub
-	if strings.TrimSpace(scope.View) == "" {
-		scope.View = "trending"
-	}
-	scope.Period = strings.ToLower(strings.TrimSpace(scope.Period))
-	switch scope.Period {
-	case "weekly", "monthly":
-	default:
-		scope.Period = "daily"
-	}
-	scope.Language = normalizeGitHubLanguageSlug(scope.Language)
-	scope.SpokenLanguageCode = strings.ToLower(strings.TrimSpace(scope.SpokenLanguageCode))
-	if scope.Limit <= 0 {
-		scope.Limit = 25
-	}
-	return scope
-}
-
 func parseGitHubTrending(body []byte, scope domain.FetchScope, fetchedAt time.Time, baseURL string) ([]domain.FeedItem, error) {
 	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("parse github trending html: %w", err)
 	}
-	scope = normalizeGitHubScope(scope)
+	scope = normalize.NormalizeGitHubScope(scope)
 	if fetchedAt.IsZero() {
 		fetchedAt = time.Now().UTC()
 	}
@@ -351,12 +332,6 @@ func githubSourceView(scope domain.FetchScope) string {
 		parts = append(parts, "spoken", scope.SpokenLanguageCode)
 	}
 	return strings.Join(parts, ":")
-}
-
-func normalizeGitHubLanguageSlug(value string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
-	value = strings.ReplaceAll(value, " ", "-")
-	return value
 }
 
 func countFromRepoLink(article *goquery.Selection, suffix string) int64 {

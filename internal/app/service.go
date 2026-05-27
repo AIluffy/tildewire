@@ -108,14 +108,57 @@ func (s *Service) SetHTTPCacheTTL(ttl time.Duration) {
 
 // LoadFeed loads cached visible items for a view and filter.
 func (s *Service) LoadFeed(ctx context.Context, view domain.SourceID, filter FeedFilter) (Snapshot, error) {
+	view, filter = s.normalizeLoadFeedRequest(view, filter)
+	if err := s.ensureRecommendations(ctx, view); err != nil {
+		return Snapshot{}, err
+	}
+	query := feedQueryForLoad(view, filter)
+	entries, rules, err := s.loadFeedEntries(ctx, view, filter, query)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	statuses, err := s.loadSourceStatuses(ctx)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	counts, err := s.loadSourceCounts(ctx, view, query)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	fetchHistory, err := s.loadFetchHistory(ctx)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	candidates, err := s.store.ListDedupeCandidates(ctx, 20)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	return Snapshot{
+		Entries:          entries,
+		Statuses:         statuses,
+		FetchHistory:     fetchHistory,
+		Rules:            rules,
+		DedupeCandidates: candidates,
+		Counts:           counts,
+		View:             view,
+		Filter:           filter,
+		LoadedAt:         time.Now().UTC(),
+	}, nil
+}
+
+func (s *Service) normalizeLoadFeedRequest(view domain.SourceID, filter FeedFilter) (domain.SourceID, FeedFilter) {
 	if view != "" && view != domain.SourceAll && view != domain.SourceRecommend && !s.sourceEnabled(view) {
 		view = domain.SourceAll
 		filter.SourceView = ""
 	}
 	filter = normalizeViewFilter(view, filter)
-	if err := s.ensureRecommendations(ctx, view); err != nil {
-		return Snapshot{}, err
+	if view == "" {
+		view = domain.SourceAll
 	}
+	return view, filter
+}
+
+func feedQueryForLoad(view domain.SourceID, filter FeedFilter) domain.FeedQuery {
 	query := domain.FeedQuery{
 		Limit:         250,
 		Search:        filter.Search,
@@ -132,13 +175,17 @@ func (s *Service) LoadFeed(ctx context.Context, view domain.SourceID, filter Fee
 	if view != "" && view != domain.SourceAll && view != domain.SourceRecommend {
 		query.Source = view
 	}
+	return query
+}
+
+func (s *Service) loadFeedEntries(ctx context.Context, view domain.SourceID, filter FeedFilter, query domain.FeedQuery) ([]domain.FeedEntry, []domain.PersonalizationRule, error) {
 	entries, err := s.listFeedForView(ctx, view, query)
 	if err != nil {
-		return Snapshot{}, err
+		return nil, nil, err
 	}
 	rules, err := s.store.ListPersonalizationRules(ctx, true)
 	if err != nil {
-		return Snapshot{}, err
+		return nil, nil, err
 	}
 	activeRules := activePersonalizationRules(rules)
 	if view != domain.SourceRecommend && !filter.IncludeHidden {
@@ -147,56 +194,49 @@ func (s *Service) LoadFeed(ctx context.Context, view domain.SourceID, filter Fee
 	entries = s.filterEntriesForEnabledSources(entries, view)
 	profile, err := s.preferenceProfileForView(ctx, view)
 	if err != nil {
-		return Snapshot{}, err
+		return nil, nil, err
 	}
 	if view != domain.SourceRecommend {
 		applySort(entries, view, time.Now().UTC(), activeRules, profile)
 	}
+	return entries, rules, nil
+}
+
+func (s *Service) loadSourceStatuses(ctx context.Context) ([]domain.SourceHealth, error) {
 	statuses, err := s.store.SourceStatuses(ctx)
 	if err != nil {
-		return Snapshot{}, err
+		return nil, err
 	}
-	statuses = s.filterStatusesForEnabledSources(statuses)
+	return s.filterStatusesForEnabledSources(statuses), nil
+}
+
+func (s *Service) loadSourceCounts(ctx context.Context, view domain.SourceID, query domain.FeedQuery) (map[domain.SourceID]int, error) {
 	counts, err := s.sourceTabCounts(ctx)
 	if err != nil {
-		return Snapshot{}, err
+		return nil, err
 	}
 	if view == domain.SourceRecommend {
 		viewCount, err := s.store.CountRecommendedFeed(ctx, query)
 		if err != nil {
-			return Snapshot{}, err
+			return nil, err
 		}
 		counts[domain.SourceRecommend] = capRecommendCount(viewCount)
 	} else if view != "" && view != domain.SourceAll {
 		viewCount, err := s.store.CountFeed(ctx, query)
 		if err != nil {
-			return Snapshot{}, err
+			return nil, err
 		}
 		counts[view] = viewCount
 	}
+	return counts, nil
+}
+
+func (s *Service) loadFetchHistory(ctx context.Context) ([]domain.FetchEvent, error) {
 	fetchHistory, err := s.store.RecentFetchEvents(ctx, 12)
 	if err != nil {
-		return Snapshot{}, err
+		return nil, err
 	}
-	fetchHistory = s.filterFetchHistoryForEnabledSources(fetchHistory)
-	candidates, err := s.store.ListDedupeCandidates(ctx, 20)
-	if err != nil {
-		return Snapshot{}, err
-	}
-	if view == "" {
-		view = domain.SourceAll
-	}
-	return Snapshot{
-		Entries:          entries,
-		Statuses:         statuses,
-		FetchHistory:     fetchHistory,
-		Rules:            rules,
-		DedupeCandidates: candidates,
-		Counts:           counts,
-		View:             view,
-		Filter:           filter,
-		LoadedAt:         time.Now().UTC(),
-	}, nil
+	return s.filterFetchHistoryForEnabledSources(fetchHistory), nil
 }
 
 func (s *Service) listFeedForView(ctx context.Context, view domain.SourceID, query domain.FeedQuery) ([]domain.FeedEntry, error) {

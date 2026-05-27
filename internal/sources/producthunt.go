@@ -8,9 +8,6 @@ import (
 	"strings"
 	"time"
 
-	// Load IANA zone data so static builds can calculate Product Hunt launch days.
-	_ "time/tzdata"
-
 	"github.com/AIluffy/tildewire/internal/domain"
 	"github.com/AIluffy/tildewire/internal/httpx"
 	"github.com/AIluffy/tildewire/internal/normalize"

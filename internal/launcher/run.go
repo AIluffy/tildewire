@@ -48,9 +48,14 @@ func Run(programName, version string, args []string, output io.Writer) error {
 		return err
 	}
 	if cfg.Debug {
-		if err := enableFileLogging(cfg.StateDir); err != nil {
+		logFile, err := enableFileLogging(cfg.StateDir)
+		if err != nil {
 			return err
 		}
+		defer func() {
+			log.SetOutput(os.Stderr)
+			_ = logFile.Close()
+		}()
 	}
 
 	ctx := context.Background()
@@ -83,21 +88,18 @@ func Run(programName, version string, args []string, output io.Writer) error {
 		return err
 	}
 
+	baseConfig := cfg
 	program := tea.NewProgram(tui.NewModel(service, initial, tui.ModelOptions{
-		Config:   cfg,
-		FirstRun: cfg.ConfigCreated,
+		Config:   baseConfig,
+		FirstRun: baseConfig.ConfigCreated,
 		SaveConfig: func(next config.Config) error {
-			next.ConfigPath = cfg.ConfigPath
-			next.DataDir = cfg.DataDir
-			next.CacheDir = cfg.CacheDir
-			next.StateDir = cfg.StateDir
-			next.Database = cfg.Database
-			next.Version = cfg.Version
-			if err := config.Save(next); err != nil {
-				return err
-			}
-			cfg = next
-			return nil
+			next.ConfigPath = baseConfig.ConfigPath
+			next.DataDir = baseConfig.DataDir
+			next.CacheDir = baseConfig.CacheDir
+			next.StateDir = baseConfig.StateDir
+			next.Database = baseConfig.Database
+			next.Version = baseConfig.Version
+			return config.Save(next)
 		},
 	}))
 	_, err = program.Run()
@@ -119,14 +121,14 @@ func sourceTokens(cfg config.Config) map[domain.SourceID]string {
 	}
 }
 
-func enableFileLogging(stateDir string) error {
+func enableFileLogging(stateDir string) (*os.File, error) {
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
-		return err
+		return nil, err
 	}
 	file, err := os.OpenFile(filepath.Join(stateDir, "debug.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	log.SetOutput(file)
-	return nil
+	return file, nil
 }

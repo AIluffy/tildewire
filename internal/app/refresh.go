@@ -172,19 +172,21 @@ func (s *Service) loadFeedAfterRefresh(ctx context.Context, view domain.SourceID
 }
 
 func classifyFetchError(err error) domain.SourceStatus {
-	message := strings.ToLower(err.Error())
-	switch {
-	case strings.Contains(message, "401"), strings.Contains(message, "auth required"), strings.Contains(message, "unauthorized"):
-		return domain.SourceStatusAuthRequired
-	case strings.Contains(message, "403"), strings.Contains(message, "429"), isLocalRateLimitWaitError(message):
+	if errors.Is(err, httpx.ErrRateLimited) {
 		return domain.SourceStatusRateLimited
-	default:
-		return domain.SourceStatusNetworkError
 	}
-}
-
-func isLocalRateLimitWaitError(message string) bool {
-	return strings.Contains(message, "rate:") && strings.Contains(message, "would exceed context deadline")
+	var statusErr *httpx.HTTPStatusError
+	if errors.As(err, &statusErr) {
+		switch statusErr.StatusCode {
+		case 401, 403:
+			return domain.SourceStatusAuthRequired
+		case 429:
+			return domain.SourceStatusRateLimited
+		default:
+			return domain.SourceStatusNetworkError
+		}
+	}
+	return domain.SourceStatusNetworkError
 }
 
 func staleSourceStatus(reason string) domain.SourceStatus {

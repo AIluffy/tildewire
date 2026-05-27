@@ -41,6 +41,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.detail {
 		return m.handleDetailKey(msg)
 	}
+	if next, cmd, ok := m.switchSourceByKey(msg); ok {
+		return next, cmd
+	}
 	switch {
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
@@ -87,22 +90,6 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.PreviewDown):
 		m.scrollPreview(m.previewPageSize())
 		return m, nil
-	case key.Matches(msg, m.keys.All):
-		return m.switchSource(domain.SourceAll)
-	case key.Matches(msg, m.keys.Recommend):
-		return m.switchSource(domain.SourceRecommend)
-	case key.Matches(msg, m.keys.GitHub):
-		return m.switchSource(domain.SourceGitHub)
-	case key.Matches(msg, m.keys.HackerNews):
-		return m.switchSource(domain.SourceHackerNews)
-	case key.Matches(msg, m.keys.AILabs):
-		return m.switchSource(domain.SourceAILabs)
-	case key.Matches(msg, m.keys.HuggingFace):
-		return m.switchSource(domain.SourceHuggingFace)
-	case key.Matches(msg, m.keys.Lobsters):
-		return m.switchSource(domain.SourceLobsters)
-	case key.Matches(msg, m.keys.ProductHunt):
-		return m.switchSource(domain.SourceProductHunt)
 	case key.Matches(msg, m.keys.Scope):
 		next, ok := nextSourceView(m.view, m.filter.SourceView)
 		if !ok {
@@ -199,6 +186,29 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
+}
+
+func (m Model) switchSourceByKey(msg tea.KeyPressMsg) (Model, tea.Cmd, bool) {
+	sources := []struct {
+		key    key.Binding
+		source domain.SourceID
+	}{
+		{key: m.keys.All, source: domain.SourceAll},
+		{key: m.keys.Recommend, source: domain.SourceRecommend},
+		{key: m.keys.GitHub, source: domain.SourceGitHub},
+		{key: m.keys.HackerNews, source: domain.SourceHackerNews},
+		{key: m.keys.AILabs, source: domain.SourceAILabs},
+		{key: m.keys.HuggingFace, source: domain.SourceHuggingFace},
+		{key: m.keys.Lobsters, source: domain.SourceLobsters},
+		{key: m.keys.ProductHunt, source: domain.SourceProductHunt},
+	}
+	for _, candidate := range sources {
+		if key.Matches(msg, candidate.key) {
+			next, cmd := m.switchSource(candidate.source)
+			return next, cmd, true
+		}
+	}
+	return m, nil, false
 }
 
 func (m Model) startRefresh(force bool, mode app.RefreshMode) (Model, tea.Cmd) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -107,7 +108,7 @@ func TestRefreshClassifiesLocalLimiterWaitAsRateLimited(t *testing.T) {
 
 	adapter := &fakeAdapter{
 		source:   domain.SourceGitHub,
-		fetchErr: errors.New("rate: Wait(n=1) would exceed context deadline"),
+		fetchErr: fmt.Errorf("%w: rate: Wait(n=1) would exceed context deadline", httpx.ErrRateLimited),
 	}
 	service := NewService(db, httpx.New(time.Second), []SourceAdapter{adapter})
 
@@ -388,6 +389,22 @@ func TestRefreshRecordsFetchHistoryForOutcomes(t *testing.T) {
 			name:       "fetch error",
 			adapter:    &fakeAdapter{fetchErr: errors.New("network down")},
 			wantStatus: domain.SourceStatusNetworkError,
+			wantErr:    true,
+		},
+		{
+			name: "http auth status",
+			adapter: &fakeAdapter{
+				fetchErr: &httpx.HTTPStatusError{StatusCode: http.StatusUnauthorized, URL: "https://example.test"},
+			},
+			wantStatus: domain.SourceStatusAuthRequired,
+			wantErr:    true,
+		},
+		{
+			name: "http rate limit status",
+			adapter: &fakeAdapter{
+				fetchErr: fmt.Errorf("%w: %w", httpx.ErrRateLimited, &httpx.HTTPStatusError{StatusCode: http.StatusTooManyRequests, URL: "https://example.test"}),
+			},
+			wantStatus: domain.SourceStatusRateLimited,
 			wantErr:    true,
 		},
 		{

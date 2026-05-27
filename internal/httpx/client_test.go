@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -326,6 +327,36 @@ func TestDoGETFallsBackToStaleCache(t *testing.T) {
 	}
 	if resp.StaleReason != StaleReasonNetworkError {
 		t.Fatalf("stale reason = %q, want %q", resp.StaleReason, StaleReasonNetworkError)
+	}
+}
+
+func TestDoGETReturnsForbiddenErrorWithoutCacheFallback(t *testing.T) {
+	cache := newMemoryCache()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+	}))
+	defer server.Close()
+	cache.put(server.URL, "stale", time.Now().Add(-2*time.Hour), time.Now().Add(-time.Hour))
+
+	client := New(time.Second, cache)
+	client.client.RetryMax = 0
+	resp, err := client.DoGET(context.Background(), GetOptions{
+		Source: "github",
+		URL:    server.URL,
+		TTL:    time.Minute,
+	})
+	if err == nil {
+		t.Fatal("expected forbidden error")
+	}
+	if resp.FromCache || resp.Stale {
+		t.Fatalf("403 should not be hidden by stale cache: %+v", resp)
+	}
+	var statusErr *HTTPStatusError
+	if !errors.As(err, &statusErr) || statusErr.StatusCode != http.StatusForbidden {
+		t.Fatalf("error = %v, want HTTPStatusError 403", err)
+	}
+	if len(cache.cooldowns) != 0 {
+		t.Fatalf("403 without rate-limit headers should not store cooldown: %+v", cache.cooldowns)
 	}
 }
 
