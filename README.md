@@ -73,11 +73,11 @@ go build -o tildewire .
 ## What It Does
 
 - Shows cached items immediately, then refreshes sources in the background.
-- Merges multiple developer-signal sources into an All view while preserving source-native ranking in source views.
+- Merges multiple developer-signal sources into an All view, maintains a personalized Recommend view, and preserves source-native ranking in source views.
 - Lets you scan with a three-panel layout: Sources, Feed, and Preview.
 - Opens richer detail views for source-native context such as comments, GitHub READMEs, and paper metadata.
 - Renders GitHub README Markdown with tables, visual dividers, padded code blocks, click-to-copy code headers, and optional terminal image previews.
-- Persists saved, read, hidden, source health, fetch history, personalization rules, fuzzy dedupe candidates, and raw HTTP cache in local SQLite.
+- Persists saved, read, hidden, source health, fetch history, personalization rules, recommendation scores, fuzzy dedupe candidates, and raw HTTP cache in local SQLite.
 - Supports full-text search, saved/unread filters, source and scope filters, language and tag facets, and hidden-item inclusion.
 - Exports saved items to Markdown, JSON, or CSV.
 - Works offline from cache, with local item actions still available.
@@ -87,7 +87,7 @@ go build -o tildewire .
 1. Start tildewire with `go run .` during development, or `tildewire` after building/installing.
 2. Cached feed data appears first so the TUI is useful before network refresh completes.
 3. Background refresh updates enabled sources and source health without blocking the UI.
-4. Use the Sources panel or number shortcuts to choose All, GitHub, Hacker News, AI Labs, Hugging Face Papers, Lobsters, or Product Hunt.
+4. Use the Sources panel or shortcuts to choose All, Recommend, GitHub, Hacker News, AI Labs, Hugging Face Papers, Lobsters, or Product Hunt.
 5. Scan the Feed panel and use Preview+ to triage the selected item with source badges, ranks, source-native metrics, summary text, content cues, and links.
 6. Press `Enter` when an item needs deeper context. Detail loading is lazy and asynchronous.
 7. Save useful items with `s`, mark read/unread with `m` or `u`, hide noise with `h`, open URLs with `o` or `O`, and copy links with `y` or `Y`.
@@ -111,7 +111,7 @@ Product Hunt is optional and token-gated. It can appear in the TUI by default, b
 
 ### Sources
 
-The Sources panel contains All plus every enabled source in the configured order. Source counts reflect the latest refreshed upstream windows stored locally, not accumulated historical cache totals. Use `Left` and `Right` to move focus between Sources, Feed, and Preview. When Sources is focused:
+The Sources panel contains All, Recommend, and every enabled source in the configured order. Recommend is a virtual view, not a refresh adapter or configurable source. Source counts reflect the latest refreshed upstream windows stored locally, not accumulated historical cache totals. Use `Left` and `Right` to move focus between Sources, Feed, and Preview. When Sources is focused:
 
 - `j` / `Down` and `k` / `Up` switch the active source.
 - `J` / `Shift+Down` and `K` / `Shift+Up` reorder focused sources and save the order to config.
@@ -119,7 +119,7 @@ The Sources panel contains All plus every enabled source in the configured order
 
 ### Feed
 
-The Feed panel lists cached and refreshed entries for the current view. All view uses a hot score with source metrics, recency, explicit rules, and implicit saved/hidden preference signals. Single-source views preserve source-native rank for that source scope.
+The Feed panel lists cached and refreshed entries for the current view. All view uses a hot score with source metrics, recency, explicit rules, and implicit saved/hidden preference signals. Recommend shows up to 10 top persisted recommendation scores from the latest cached feed window, built from boost rules and saved-item preference signals, reduced by mute rules and hidden-item preference signals. Single-source views preserve source-native rank for that source scope.
 
 Each feed row shows a compact source badge, title, and subtitle. Hidden items stay out of the normal feed unless the filter includes hidden items.
 
@@ -207,13 +207,13 @@ Press `c` to open Settings. The settings form can edit:
 - GitHub token.
 - Product Hunt token.
 
-Settings are saved back to `config.toml`. Source visibility and token changes are applied to the running service without requiring a process restart. Disabling a source removes it from source navigation, filters, palette source commands, source health, recent fetch history, source counts, and refresh execution while preserving local cached data.
+Settings are saved back to `config.toml`. Source visibility and token changes are applied to the running service without requiring a process restart. Disabling a source removes it from source navigation, filters, palette source commands, source health, recent fetch history, source counts, refresh execution, and future Recommend scoring while preserving local cached data.
 
 Theme commands are also available from the command palette as `Theme: ...` entries. Themes affect the TUI chrome, source badges, status colors, command/settings overlays, and Markdown detail accents while preserving the terminal background.
 
 ## Personalization and Dedupe
 
-tildewire combines explicit rules and implicit behavior signals in the All view.
+tildewire combines explicit rules and implicit behavior signals in the All and Recommend views.
 
 Explicit rules:
 
@@ -226,6 +226,8 @@ Implicit signals:
 
 - Saved tags, languages, repos, authors, and sources slightly increase related All-view ranking.
 - Hidden tags, languages, repos, authors, and sources slightly reduce related All-view ranking.
+
+Recommend is trained by saving items or creating boost rules from the command palette. It shows only the top 10 recommendations from the latest cached feed window, gives saved sources extra weight in Recommend, stays empty until it has a positive interest signal, and always excludes durable hidden items and hide-rule matches, even when Show hidden items is enabled.
 
 Open the Personalization Rules panel from the command palette to review rules. Use `Space` to toggle a rule and `d` to delete it.
 
@@ -273,6 +275,7 @@ The Clear cache palette action clears refreshable cache data, source status stat
 | `Esc` | Back or cancel the current modal |
 | `q` / `Ctrl+C` | Quit |
 | `a` | All sources |
+| `0` | Recommend |
 | `1` | GitHub Trending |
 | `2` | Hacker News |
 | `3` | Hugging Face Papers |

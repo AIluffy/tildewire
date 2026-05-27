@@ -117,6 +117,48 @@ func (q *Queries) CountFeed(ctx context.Context, arg CountFeedParams) (int64, er
 	return total, err
 }
 
+const countRecommendedFeed = `-- name: CountRecommendedFeed :one
+SELECT COUNT(*) AS total
+FROM recommendation_scores rs
+JOIN items i ON i.id = rs.item_id
+LEFT JOIN item_state st ON st.item_id = i.id
+WHERE COALESCE(st.hidden, 0) = 0
+  AND (?1 = 0 OR COALESCE(st.saved, 0) = 1)
+  AND (?2 = 0 OR COALESCE(st.read, 0) = 0)
+  AND (?3 = '' OR lower(COALESCE(i.language, '')) = ?3)
+  AND (?4 = '' OR EXISTS (
+    SELECT 1 FROM item_tags tag WHERE tag.item_id = i.id AND lower(tag.tag) = ?4
+  ))
+  AND (?5 = '' OR EXISTS (
+    SELECT 1 FROM item_search search
+    WHERE search.item_id = i.id
+      AND item_search MATCH ?5
+    LIMIT 1
+  )
+  )
+`
+
+type CountRecommendedFeedParams struct {
+	SavedOnly  interface{}
+	UnreadOnly interface{}
+	Language   interface{}
+	Tag        interface{}
+	Search     interface{}
+}
+
+func (q *Queries) CountRecommendedFeed(ctx context.Context, arg CountRecommendedFeedParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countRecommendedFeed,
+		arg.SavedOnly,
+		arg.UnreadOnly,
+		arg.Language,
+		arg.Tag,
+		arg.Search,
+	)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const createPersonalizationRule = `-- name: CreatePersonalizationRule :one
 INSERT INTO personalization_rules (effect, target, value, enabled, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?)
@@ -194,6 +236,15 @@ DELETE FROM personalization_rules WHERE id = ?
 
 func (q *Queries) DeletePersonalizationRule(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deletePersonalizationRule, id)
+	return err
+}
+
+const deleteRecommendationScores = `-- name: DeleteRecommendationScores :exec
+DELETE FROM recommendation_scores
+`
+
+func (q *Queries) DeleteRecommendationScores(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteRecommendationScores)
 	return err
 }
 
@@ -437,6 +488,30 @@ type InsertItemTagParams struct {
 
 func (q *Queries) InsertItemTag(ctx context.Context, arg InsertItemTagParams) error {
 	_, err := q.db.ExecContext(ctx, insertItemTag, arg.ItemID, arg.Tag)
+	return err
+}
+
+const insertRecommendationScore = `-- name: InsertRecommendationScore :exec
+INSERT INTO recommendation_scores (item_id, score, interest_score, hot_score, computed_at)
+VALUES (?, ?, ?, ?, ?)
+`
+
+type InsertRecommendationScoreParams struct {
+	ItemID        string
+	Score         float64
+	InterestScore float64
+	HotScore      float64
+	ComputedAt    string
+}
+
+func (q *Queries) InsertRecommendationScore(ctx context.Context, arg InsertRecommendationScoreParams) error {
+	_, err := q.db.ExecContext(ctx, insertRecommendationScore,
+		arg.ItemID,
+		arg.Score,
+		arg.InterestScore,
+		arg.HotScore,
+		arg.ComputedAt,
+	)
 	return err
 }
 
@@ -1072,6 +1147,132 @@ func (q *Queries) ListRecentFetchEvents(ctx context.Context, limit int64) ([]Lis
 			&i.Stale,
 			&i.StaleReason,
 			&i.Error,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRecommendedFeed = `-- name: ListRecommendedFeed :many
+SELECT i.id, i.canonical_key, i.title, i.subtitle, i.summary, i.url, i.canonical_url, i.comments_url,
+       i.item_type, i.author, i.organization, i.language, i.published_at, i.first_seen_at, i.last_seen_at,
+       i.repo, i.arxiv_id, i.metrics_json, i.refs_json, i.metadata_json, COALESCE(i.simhash, '') AS simhash,
+       COALESCE(st.read, 0) AS read, COALESCE(st.saved, 0) AS saved, COALESCE(st.hidden, 0) AS hidden,
+       st.read_at, st.saved_at, st.hidden_at, COALESCE(st.note, '') AS note
+FROM recommendation_scores rs
+JOIN items i ON i.id = rs.item_id
+LEFT JOIN item_state st ON st.item_id = i.id
+WHERE COALESCE(st.hidden, 0) = 0
+  AND (?1 = 0 OR COALESCE(st.saved, 0) = 1)
+  AND (?2 = 0 OR COALESCE(st.read, 0) = 0)
+  AND (?3 = '' OR lower(COALESCE(i.language, '')) = ?3)
+  AND (?4 = '' OR EXISTS (
+    SELECT 1 FROM item_tags tag WHERE tag.item_id = i.id AND lower(tag.tag) = ?4
+  ))
+  AND (?5 = '' OR EXISTS (
+    SELECT 1 FROM item_search search
+    WHERE search.item_id = i.id
+      AND item_search MATCH ?5
+    LIMIT 1
+  )
+  )
+ORDER BY rs.score DESC, i.last_seen_at DESC
+LIMIT ?6
+`
+
+type ListRecommendedFeedParams struct {
+	SavedOnly  interface{}
+	UnreadOnly interface{}
+	Language   interface{}
+	Tag        interface{}
+	Search     interface{}
+	Limit      int64
+}
+
+type ListRecommendedFeedRow struct {
+	ID           string
+	CanonicalKey string
+	Title        string
+	Subtitle     sql.NullString
+	Summary      sql.NullString
+	Url          sql.NullString
+	CanonicalUrl sql.NullString
+	CommentsUrl  sql.NullString
+	ItemType     string
+	Author       sql.NullString
+	Organization sql.NullString
+	Language     sql.NullString
+	PublishedAt  sql.NullString
+	FirstSeenAt  string
+	LastSeenAt   string
+	Repo         sql.NullString
+	ArxivID      sql.NullString
+	MetricsJson  sql.NullString
+	RefsJson     sql.NullString
+	MetadataJson sql.NullString
+	Simhash      string
+	Read         int64
+	Saved        int64
+	Hidden       int64
+	ReadAt       sql.NullString
+	SavedAt      sql.NullString
+	HiddenAt     sql.NullString
+	Note         string
+}
+
+func (q *Queries) ListRecommendedFeed(ctx context.Context, arg ListRecommendedFeedParams) ([]ListRecommendedFeedRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRecommendedFeed,
+		arg.SavedOnly,
+		arg.UnreadOnly,
+		arg.Language,
+		arg.Tag,
+		arg.Search,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRecommendedFeedRow
+	for rows.Next() {
+		var i ListRecommendedFeedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CanonicalKey,
+			&i.Title,
+			&i.Subtitle,
+			&i.Summary,
+			&i.Url,
+			&i.CanonicalUrl,
+			&i.CommentsUrl,
+			&i.ItemType,
+			&i.Author,
+			&i.Organization,
+			&i.Language,
+			&i.PublishedAt,
+			&i.FirstSeenAt,
+			&i.LastSeenAt,
+			&i.Repo,
+			&i.ArxivID,
+			&i.MetricsJson,
+			&i.RefsJson,
+			&i.MetadataJson,
+			&i.Simhash,
+			&i.Read,
+			&i.Saved,
+			&i.Hidden,
+			&i.ReadAt,
+			&i.SavedAt,
+			&i.HiddenAt,
+			&i.Note,
 		); err != nil {
 			return nil, err
 		}

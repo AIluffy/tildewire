@@ -15,6 +15,7 @@ type keyMap struct {
 	Back         key.Binding
 	Quit         key.Binding
 	All          key.Binding
+	Recommend    key.Binding
 	GitHub       key.Binding
 	HackerNews   key.Binding
 	AILabs       key.Binding
@@ -53,6 +54,7 @@ func defaultKeyMap() keyMap {
 		Back:         key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
 		Quit:         key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 		All:          key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "all")),
+		Recommend:    key.NewBinding(key.WithKeys("0"), key.WithHelp("0", "recommend")),
 		GitHub:       key.NewBinding(key.WithKeys("1"), key.WithHelp("1", "github")),
 		HackerNews:   key.NewBinding(key.WithKeys("2"), key.WithHelp("2", "hn")),
 		HuggingFace:  key.NewBinding(key.WithKeys("3"), key.WithHelp("3", "hf")),
@@ -85,7 +87,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.FocusLeft, k.FocusRight, k.Up, k.Down, k.SourceUp, k.SourceDown, k.PreviewUp, k.PreviewDown, k.OpenDetail, k.Back},
-		{k.All, k.GitHub, k.HackerNews, k.AILabs, k.HuggingFace, k.Lobsters, k.ProductHunt, k.Scope, k.Search, k.Filter, k.Palette, k.Settings, k.Refresh},
+		{k.All, k.Recommend, k.GitHub, k.HackerNews, k.AILabs, k.HuggingFace, k.Lobsters, k.ProductHunt, k.Scope, k.Search, k.Filter, k.Palette, k.Settings, k.Refresh},
 		{k.Save, k.MarkRead, k.MarkUnread, k.Hide},
 		{k.OpenURL, k.OpenSource, k.CopyURL, k.CopyMarkdown, k.Health, k.Quit},
 	}

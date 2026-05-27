@@ -8,6 +8,8 @@ type SourceID string
 const (
 	// SourceAll is the merged feed view.
 	SourceAll SourceID = "all"
+	// SourceRecommend is a virtual personalized recommendation view.
+	SourceRecommend SourceID = "recommend"
 	// SourceHackerNews identifies Hacker News.
 	SourceHackerNews SourceID = "hackernews"
 	// SourceGitHub identifies GitHub Trending.

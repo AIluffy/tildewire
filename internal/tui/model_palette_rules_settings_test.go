@@ -255,7 +255,17 @@ func TestModelSettingsFormSavesRuntimeConfig(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("expected save settings command")
 	}
-	model = runOptionalCmd(t, model, cmd)
+	msg := cmd()
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok || len(batch) < 2 {
+		t.Fatalf("settings save should batch config save and feed reload, got %T len=%d", msg, len(batch))
+	}
+	updatedAfterReload, _ := model.Update(batch[1]())
+	model = updatedAfterReload.(Model)
+	if service.lastLoadView != domain.SourceAll {
+		t.Fatalf("settings source visibility change reloaded %s, want all", service.lastLoadView)
+	}
+	model = runOptionalCmd(t, model, batch[0])
 	if !saved {
 		t.Fatal("settings save callback was not called")
 	}

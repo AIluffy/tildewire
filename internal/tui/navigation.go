@@ -301,7 +301,7 @@ func (m Model) feedIndexAtContentRow(row int) (int, bool) {
 func (m *Model) setSource(source domain.SourceID) {
 	m.rememberFeedSelection()
 	m.view = source
-	if source == domain.SourceAll {
+	if source == domain.SourceAll || source == domain.SourceRecommend {
 		m.filter.SourceView = ""
 	} else {
 		m.filter.SourceView = defaultSourceView(source)

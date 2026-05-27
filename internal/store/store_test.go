@@ -547,6 +547,81 @@ func TestStoreDedupeCandidatesRoundTripAndIgnore(t *testing.T) {
 	}
 }
 
+func TestStoreRecommendationScoresRoundTripAndFilters(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t)
+	defer store.Close()
+
+	goItem := testSourceItem("repo-go", "repo:owner/go", "Go terminal radar", domain.SourceGitHub, 1)
+	goItem.Language = "Go"
+	goItem.Tags = []string{"ai", "terminal"}
+	pythonItem := testItem("hn-python", "hackernews:python", "Python launch", 2)
+	pythonItem.Language = "Python"
+	pythonItem.Tags = []string{"launch"}
+	if err := store.UpsertFeedItems(ctx, []domain.FeedItem{goItem, pythonItem}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetSaved(ctx, goItem.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetRead(ctx, pythonItem.ID, true); err != nil {
+		t.Fatal(err)
+	}
+
+	computedAt := time.Date(2026, 5, 10, 12, 0, 0, 0, time.UTC)
+	if err := store.ReplaceRecommendationScores(ctx, []domain.RecommendationScore{
+		{ItemID: pythonItem.ID, Score: 0.7, InterestScore: 0.5, HotScore: 0.8, ComputedAt: computedAt},
+		{ItemID: goItem.ID, Score: 1.2, InterestScore: 1.0, HotScore: 0.8, ComputedAt: computedAt},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := store.ListRecommendedFeed(ctx, domain.FeedQuery{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 || entries[0].Item.ID != goItem.ID || entries[1].Item.ID != pythonItem.ID {
+		t.Fatalf("recommendations not score sorted: %+v", entries)
+	}
+	count, err := store.CountRecommendedFeed(ctx, domain.FeedQuery{Search: "terminal", SavedOnly: true, Language: "go", Tag: "ai"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("filtered recommendation count = %d, want 1", count)
+	}
+	entries, err = store.ListRecommendedFeed(ctx, domain.FeedQuery{UnreadOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Item.ID != goItem.ID {
+		t.Fatalf("unread recommendations = %+v, want only unread go item", entries)
+	}
+
+	if err := store.ReplaceRecommendationScores(ctx, []domain.RecommendationScore{
+		{ItemID: pythonItem.ID, Score: 2.0, InterestScore: 1.5, HotScore: 2.0, ComputedAt: computedAt.Add(time.Minute)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	entries, err = store.ListRecommendedFeed(ctx, domain.FeedQuery{IncludeHidden: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Item.ID != pythonItem.ID {
+		t.Fatalf("replace should remove stale recommendation rows, got %+v", entries)
+	}
+	if err := store.SetHidden(ctx, pythonItem.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	entries, err = store.ListRecommendedFeed(ctx, domain.FeedQuery{IncludeHidden: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("recommendations should ignore IncludeHidden and hide durable hidden rows: %+v", entries)
+	}
+}
+
 func TestStoreInitialMVPSourceStatusesAreEnabled(t *testing.T) {
 	ctx := context.Background()
 	store := openTestStore(t)
@@ -585,8 +660,8 @@ func TestStoreMigrateIsIdempotent(t *testing.T) {
 		t.Fatalf("migration version rows changed after second migrate: before=%d after=%d", before, after)
 	}
 	latest := latestMigrationVersion(t, store.db)
-	if latest != 6 {
-		t.Fatalf("latest migration version = %d, want 6", latest)
+	if latest != 7 {
+		t.Fatalf("latest migration version = %d, want 7", latest)
 	}
 }
 
@@ -614,7 +689,7 @@ func TestStoreMigrateAcceptsExistingGooseVersionTable(t *testing.T) {
 	)`); err != nil {
 		t.Fatal(err)
 	}
-	for version := 1; version <= 5; version++ {
+	for version := 1; version <= 6; version++ {
 		if _, err := store.db.ExecContext(ctx, `INSERT INTO goose_db_version (version_id, is_applied) VALUES (?, 1)`, version); err != nil {
 			t.Fatal(err)
 		}
@@ -623,11 +698,11 @@ func TestStoreMigrateAcceptsExistingGooseVersionTable(t *testing.T) {
 	if err := store.Migrate(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if got := migrationVersionRows(t, store.db); got != 6 {
-		t.Fatalf("migration version rows = %d, want versions 1 through 6", got)
+	if got := migrationVersionRows(t, store.db); got != 7 {
+		t.Fatalf("migration version rows = %d, want versions 1 through 7", got)
 	}
-	if got := latestMigrationVersion(t, store.db); got != 6 {
-		t.Fatalf("latest migration version = %d, want 6", got)
+	if got := latestMigrationVersion(t, store.db); got != 7 {
+		t.Fatalf("latest migration version = %d, want 7", got)
 	}
 }
 

@@ -40,6 +40,9 @@ type DetailAdapter interface {
 type FeedStore interface {
 	ListFeed(context.Context, domain.FeedQuery) ([]domain.FeedEntry, error)
 	CountFeed(context.Context, domain.FeedQuery) (int, error)
+	ListRecommendedFeed(context.Context, domain.FeedQuery) ([]domain.FeedEntry, error)
+	CountRecommendedFeed(context.Context, domain.FeedQuery) (int, error)
+	ReplaceRecommendationScores(context.Context, []domain.RecommendationScore) error
 	ReplaceFeedItemsForSourceView(context.Context, domain.SourceID, string, []domain.FeedItem) error
 	SetSaved(context.Context, string, bool) error
 	SetRead(context.Context, string, bool) error

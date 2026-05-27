@@ -59,6 +59,15 @@ type PreferenceProfile struct {
 	HiddenSources   map[string]int
 }
 
+// RecommendationScore is a durable score for the virtual Recommend view.
+type RecommendationScore struct {
+	ItemID        string
+	Score         float64
+	InterestScore float64
+	HotScore      float64
+	ComputedAt    time.Time
+}
+
 // DedupeCandidate is a non-destructive fuzzy duplicate suggestion.
 type DedupeCandidate struct {
 	Key       string

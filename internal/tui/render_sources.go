@@ -21,6 +21,7 @@ func (m Model) sourceRows() []sourceRow {
 	rows := []sourceRow{
 		{},
 		{source: domain.SourceAll, label: "All"},
+		{source: domain.SourceRecommend, label: "Recommend"},
 	}
 	for _, entry := range m.sourceCatalog() {
 		rows = append(rows, sourceRow{source: entry.Source, label: entry.Label})
@@ -94,7 +95,7 @@ func (m Model) enabledSourceIDs() []domain.SourceID {
 }
 
 func (m Model) sourceEnabled(source domain.SourceID) bool {
-	if source == "" || source == domain.SourceAll {
+	if source == "" || source == domain.SourceAll || source == domain.SourceRecommend {
 		return true
 	}
 	return m.enabledSourceSet()[source]

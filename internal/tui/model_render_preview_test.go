@@ -26,6 +26,18 @@ func TestModelGitHubHeaderUsesTrendingTitle(t *testing.T) {
 	}
 }
 
+func TestModelRecommendHeaderUsesRecommendTitle(t *testing.T) {
+	service := &fakeService{snapshot: tuiSnapshot(false)}
+	model := NewModel(service, tuiSnapshot(false))
+
+	model = runKeyCommand(t, model, "0")
+	header := model.renderHeader()
+
+	if !strings.Contains(strings.ToLower(header), "view: recommend") {
+		t.Fatalf("recommend header = %q, want View: Recommend", header)
+	}
+}
+
 func TestModelHeaderRendersGradientTitle(t *testing.T) {
 	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false))
 
@@ -112,7 +124,7 @@ func TestModelRenderSourcesSpreadsCountsToRightEdge(t *testing.T) {
 	snapshot.Counts[domain.SourceProductHunt] = 12
 	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
 
-	rendered := ansi.Strip(model.renderSources(28, 9))
+	rendered := ansi.Strip(model.renderSources(28, 10))
 	for _, line := range strings.Split(rendered, "\n") {
 		if !strings.Contains(line, "Product Hunt") {
 			continue

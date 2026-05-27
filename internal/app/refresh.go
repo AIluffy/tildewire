@@ -33,6 +33,7 @@ func (s *Service) Refresh(ctx context.Context, view domain.SourceID, filter Feed
 			refreshErrs = append(refreshErrs, err)
 		}
 	}
+	s.markRecommendationsDirty()
 	snapshot, loadErr := s.loadFeedAfterRefresh(ctx, view, filter)
 	if loadErr != nil {
 		refreshErrs = append(refreshErrs, loadErr)
@@ -211,7 +212,7 @@ func refreshScopes(adapter SourceAdapter, view domain.SourceID, filter FeedFilte
 	case RefreshModeStartup:
 		return primaryScopes(adapter)
 	case RefreshModeVisible:
-		if view == "" || view == domain.SourceAll {
+		if view == "" || view == domain.SourceAll || view == domain.SourceRecommend {
 			return primaryScopes(adapter)
 		}
 		if view != adapter.Source() {

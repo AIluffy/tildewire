@@ -53,6 +53,7 @@ func TestModelSourceKeysLoadViews(t *testing.T) {
 		key  string
 		view domain.SourceID
 	}{
+		{key: "0", view: domain.SourceRecommend},
 		{key: "1", view: domain.SourceGitHub},
 		{key: "2", view: domain.SourceHackerNews},
 		{key: "3", view: domain.SourceHuggingFace},
@@ -126,6 +127,10 @@ func TestModelSourceKeysSetDefaultSourceView(t *testing.T) {
 	if service.lastFilter.SourceView != "" {
 		t.Fatalf("AI Labs source view = %q, want aggregate source", service.lastFilter.SourceView)
 	}
+	model = runKeyCommand(t, model, "0")
+	if service.lastFilter.SourceView != "" {
+		t.Fatalf("recommend source view = %q, want virtual aggregate source", service.lastFilter.SourceView)
+	}
 	model = runKeyCommand(t, model, "a")
 	if service.lastFilter.SourceView != "" {
 		t.Fatalf("all source view = %q, want cleared", service.lastFilter.SourceView)
@@ -171,6 +176,24 @@ func TestModelScopeKeyCyclesCurrentSourceViews(t *testing.T) {
 	model = runKeyCommand(t, model, "v")
 	if service.lastFilter.SourceView != "trending:weekly" {
 		t.Fatalf("github cycled source view = %q, want trending:weekly", service.lastFilter.SourceView)
+	}
+}
+
+func TestModelRecommendScopeKeyNoOps(t *testing.T) {
+	service := &fakeService{snapshot: tuiSnapshot(false)}
+	model := NewModel(service, tuiSnapshot(false))
+
+	model = runKeyCommand(t, model, "0")
+	service.lastLoadView = ""
+	model, cmd := updateModelWithKey(t, model, "v")
+	if cmd != nil {
+		t.Fatal("recommend scope key should not load feed")
+	}
+	if model.view != domain.SourceRecommend || model.filter.SourceView != "" {
+		t.Fatalf("recommend view/filter changed: view=%s filter=%+v", model.view, model.filter)
+	}
+	if service.lastLoadView != "" {
+		t.Fatalf("recommend scope key loaded %s", service.lastLoadView)
 	}
 }
 
@@ -248,11 +271,11 @@ func TestModelSourcesFocusUpDownSwitchesSources(t *testing.T) {
 	}
 	updated, _ := model.Update(cmd())
 	model = updated.(Model)
-	if model.view != domain.SourceGitHub {
-		t.Fatalf("source down view = %s, want github", model.view)
+	if model.view != domain.SourceRecommend {
+		t.Fatalf("source down view = %s, want recommend", model.view)
 	}
-	if service.lastLoadView != domain.SourceGitHub {
-		t.Fatalf("source down loaded %s, want github", service.lastLoadView)
+	if service.lastLoadView != domain.SourceRecommend {
+		t.Fatalf("source down loaded %s, want recommend", service.lastLoadView)
 	}
 
 	model, cmd = updateModelWithKey(t, model, "up")
@@ -271,14 +294,28 @@ func TestModelSourcesUsePersistedOrder(t *testing.T) {
 	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false), ModelOptions{Config: cfg})
 
 	rendered := ansi.Strip(model.renderSources(24, 8))
+	recommendIndex := strings.Index(rendered, "Recommend")
 	productHuntIndex := strings.Index(rendered, "Product Hunt")
 	githubIndex := strings.Index(rendered, "GitHub")
 	hackerNewsIndex := strings.Index(rendered, "Hacker News")
-	if productHuntIndex < 0 || githubIndex < 0 || hackerNewsIndex < 0 {
+	if recommendIndex < 0 || productHuntIndex < 0 || githubIndex < 0 || hackerNewsIndex < 0 {
 		t.Fatalf("render missing configured sources:\n%s", rendered)
 	}
-	if !(productHuntIndex < githubIndex && githubIndex < hackerNewsIndex) {
+	if !(recommendIndex < productHuntIndex && productHuntIndex < githubIndex && githubIndex < hackerNewsIndex) {
 		t.Fatalf("sources not rendered in persisted order:\n%s", rendered)
+	}
+}
+
+func TestModelRecommendEmptyStatePromptsForTraining(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	snapshot.View = domain.SourceRecommend
+	snapshot.Entries = nil
+	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model.refreshing = false
+
+	rendered := ansi.Strip(model.renderFeed(80, 8))
+	if !strings.Contains(rendered, "No recommendations yet.") || !strings.Contains(rendered, "Save or boost items to train Recommend.") {
+		t.Fatalf("recommend empty state missing training prompt:\n%s", rendered)
 	}
 }
 
@@ -324,7 +361,7 @@ func TestModelMouseClickSourcesLoadsSelectedSource(t *testing.T) {
 	model.width = 100
 	model.height = 16
 
-	updated, cmd := model.Update(mouseClick(3, 6))
+	updated, cmd := model.Update(mouseClick(3, 7))
 	model = updated.(Model)
 	if cmd == nil {
 		t.Fatal("expected source click to load feed")
@@ -348,7 +385,7 @@ func TestModelMouseSourceTabsRememberIndependentFeedSelection(t *testing.T) {
 
 	model, _ = updateModelWithKey(t, model, "down")
 	layout := model.mainLayout()
-	updated, cmd := model.Update(mouseClick(layout.sources.contentX+1, layout.sources.contentY+3))
+	updated, cmd := model.Update(mouseClick(layout.sources.contentX+1, layout.sources.contentY+4))
 	model = updated.(Model)
 	if cmd == nil {
 		t.Fatal("expected source click to load feed")

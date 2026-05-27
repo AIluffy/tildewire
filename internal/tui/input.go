@@ -86,6 +86,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case key.Matches(msg, m.keys.All):
 		return m.switchSource(domain.SourceAll)
+	case key.Matches(msg, m.keys.Recommend):
+		return m.switchSource(domain.SourceRecommend)
 	case key.Matches(msg, m.keys.GitHub):
 		return m.switchSource(domain.SourceGitHub)
 	case key.Matches(msg, m.keys.HackerNews):

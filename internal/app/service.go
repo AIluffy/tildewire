@@ -11,12 +11,13 @@ import (
 
 // Service coordinates stores, sources, sorting, and user state.
 type Service struct {
-	store    FeedStore
-	client   httpx.Requester
-	adapters []SourceAdapter
-	sources  []domain.SourceID
-	enabled  map[domain.SourceID]bool
-	storeMu  sync.Mutex
+	store               FeedStore
+	client              httpx.Requester
+	adapters            []SourceAdapter
+	sources             []domain.SourceID
+	enabled             map[domain.SourceID]bool
+	recommendationDirty bool
+	storeMu             sync.Mutex
 }
 
 // Snapshot is the TUI-ready feed state.
@@ -66,11 +67,12 @@ func NewService(store FeedStore, client httpx.Requester, adapters []SourceAdapte
 	ordered := orderedAdapters(adapters)
 	enabled := enabledSourceSet(nil)
 	return &Service{
-		store:    store,
-		client:   client,
-		adapters: ordered,
-		sources:  countSources(ordered, enabled),
-		enabled:  enabled,
+		store:               store,
+		client:              client,
+		adapters:            ordered,
+		sources:             countSources(ordered, enabled),
+		enabled:             enabled,
+		recommendationDirty: true,
 	}
 }
 
@@ -78,6 +80,7 @@ func NewService(store FeedStore, client httpx.Requester, adapters []SourceAdapte
 func (s *Service) SetSourceConfig(enabled []domain.SourceID, tokens map[domain.SourceID]string) {
 	s.enabled = enabledSourceSet(enabled)
 	s.sources = countSources(s.adapters, s.enabled)
+	s.markRecommendationsDirty()
 	for _, adapter := range s.adapters {
 		setter, ok := adapter.(TokenAdapter)
 		if !ok {
@@ -105,11 +108,14 @@ func (s *Service) SetHTTPCacheTTL(ttl time.Duration) {
 
 // LoadFeed loads cached visible items for a view and filter.
 func (s *Service) LoadFeed(ctx context.Context, view domain.SourceID, filter FeedFilter) (Snapshot, error) {
-	if view != "" && view != domain.SourceAll && !s.sourceEnabled(view) {
+	if view != "" && view != domain.SourceAll && view != domain.SourceRecommend && !s.sourceEnabled(view) {
 		view = domain.SourceAll
 		filter.SourceView = ""
 	}
 	filter = normalizeViewFilter(view, filter)
+	if err := s.ensureRecommendations(ctx, view); err != nil {
+		return Snapshot{}, err
+	}
 	query := domain.FeedQuery{
 		Limit:         250,
 		Search:        filter.Search,
@@ -120,10 +126,13 @@ func (s *Service) LoadFeed(ctx context.Context, view domain.SourceID, filter Fee
 		Tag:           filter.Tag,
 		IncludeHidden: filter.IncludeHidden,
 	}
-	if view != "" && view != domain.SourceAll {
+	if view == domain.SourceRecommend {
+		query.Limit = recommendDisplayLimit
+	}
+	if view != "" && view != domain.SourceAll && view != domain.SourceRecommend {
 		query.Source = view
 	}
-	entries, err := s.store.ListFeed(ctx, query)
+	entries, err := s.listFeedForView(ctx, view, query)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -132,7 +141,7 @@ func (s *Service) LoadFeed(ctx context.Context, view domain.SourceID, filter Fee
 		return Snapshot{}, err
 	}
 	activeRules := activePersonalizationRules(rules)
-	if !filter.IncludeHidden {
+	if view != domain.SourceRecommend && !filter.IncludeHidden {
 		entries = filterPersonalizedHidden(entries, activeRules)
 	}
 	entries = s.filterEntriesForEnabledSources(entries, view)
@@ -140,7 +149,9 @@ func (s *Service) LoadFeed(ctx context.Context, view domain.SourceID, filter Fee
 	if err != nil {
 		return Snapshot{}, err
 	}
-	applySort(entries, view, time.Now().UTC(), activeRules, profile)
+	if view != domain.SourceRecommend {
+		applySort(entries, view, time.Now().UTC(), activeRules, profile)
+	}
 	statuses, err := s.store.SourceStatuses(ctx)
 	if err != nil {
 		return Snapshot{}, err
@@ -150,7 +161,13 @@ func (s *Service) LoadFeed(ctx context.Context, view domain.SourceID, filter Fee
 	if err != nil {
 		return Snapshot{}, err
 	}
-	if view != "" && view != domain.SourceAll {
+	if view == domain.SourceRecommend {
+		viewCount, err := s.store.CountRecommendedFeed(ctx, query)
+		if err != nil {
+			return Snapshot{}, err
+		}
+		counts[domain.SourceRecommend] = capRecommendCount(viewCount)
+	} else if view != "" && view != domain.SourceAll {
 		viewCount, err := s.store.CountFeed(ctx, query)
 		if err != nil {
 			return Snapshot{}, err
@@ -181,4 +198,26 @@ func (s *Service) LoadFeed(ctx context.Context, view domain.SourceID, filter Fee
 		Filter:           filter,
 		LoadedAt:         time.Now().UTC(),
 	}, nil
+}
+
+func (s *Service) listFeedForView(ctx context.Context, view domain.SourceID, query domain.FeedQuery) ([]domain.FeedEntry, error) {
+	if view == domain.SourceRecommend {
+		return s.store.ListRecommendedFeed(ctx, query)
+	}
+	return s.store.ListFeed(ctx, query)
+}
+
+func (s *Service) markRecommendationsDirty() {
+	s.recommendationDirty = true
+}
+
+func (s *Service) ensureRecommendations(ctx context.Context, view domain.SourceID) error {
+	if !s.recommendationDirty && view != domain.SourceRecommend {
+		return nil
+	}
+	if err := s.recomputeRecommendations(ctx); err != nil {
+		return err
+	}
+	s.recommendationDirty = false
+	return nil
 }

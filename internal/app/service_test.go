@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -522,6 +523,323 @@ func TestLoadFeedUsesSavedAndHiddenPreferenceSignals(t *testing.T) {
 	}
 	if scores[aiItem.ID] <= scores[cryptoItem.ID] {
 		t.Fatalf("saved/hidden preferences should favor ai over crypto: scores=%+v", scores)
+	}
+}
+
+func TestRecommendFeedUsesBoostRulesAndSavedProfile(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+
+	now := time.Date(2026, 5, 10, 10, 0, 0, 0, time.UTC)
+	boosted := appTestSourceItem("hn-boosted", "hackernews:boosted", "SQLite terminal radar", domain.SourceHackerNews, 5, now)
+	boosted.Tags = []string{"sqlite"}
+	savedSeed := appTestSourceItem("hn-seed", "hackernews:seed", "Saved AI seed", domain.SourceHackerNews, 1, now)
+	savedSeed.Tags = []string{"ai"}
+	aiCandidate := appTestSourceItem("hn-ai", "hackernews:ai", "AI candidate", domain.SourceHackerNews, 2, now)
+	aiCandidate.Tags = []string{"ai"}
+	general := appTestSourceItem("gh-general", "repo:owner/general", "General launch", domain.SourceGitHub, 3, now)
+	if err := db.UpsertFeedItems(ctx, []domain.FeedItem{boosted, savedSeed, aiCandidate, general}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetSaved(ctx, savedSeed.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.CreatePersonalizationRule(ctx, domain.PersonalizationRule{
+		Effect:  domain.RuleEffectBoost,
+		Target:  domain.RuleTargetKeyword,
+		Value:   "sqlite",
+		Enabled: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(db, httpx.New(time.Second), nil)
+
+	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := appEntryIDs(snapshot.Entries)
+	if !slices.Contains(ids, boosted.ID) || !slices.Contains(ids, aiCandidate.ID) || slices.Contains(ids, general.ID) {
+		t.Fatalf("recommend ids = %+v, want boosted and saved-profile candidate without general item", ids)
+	}
+	if snapshot.Counts[domain.SourceRecommend] != len(snapshot.Entries) {
+		t.Fatalf("recommend count = %d, entries = %d", snapshot.Counts[domain.SourceRecommend], len(snapshot.Entries))
+	}
+}
+
+func TestRecommendFeedLimitsToTopTen(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+
+	now := time.Date(2026, 5, 10, 10, 0, 0, 0, time.UTC)
+	items := make([]domain.FeedItem, 0, 12)
+	for rank := 1; rank <= 12; rank++ {
+		item := appTestSourceItem(
+			fmt.Sprintf("hn-match-%02d", rank),
+			fmt.Sprintf("hackernews:match-%02d", rank),
+			fmt.Sprintf("Match candidate %02d", rank),
+			domain.SourceHackerNews,
+			rank,
+			now,
+		)
+		items = append(items, item)
+	}
+	if err := db.UpsertFeedItems(ctx, items); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.CreatePersonalizationRule(ctx, domain.PersonalizationRule{
+		Effect:  domain.RuleEffectBoost,
+		Target:  domain.RuleTargetKeyword,
+		Value:   "match",
+		Enabled: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(db, httpx.New(time.Second), nil)
+
+	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Entries) != 10 {
+		t.Fatalf("recommend entries = %d, want top 10", len(snapshot.Entries))
+	}
+	if snapshot.Counts[domain.SourceRecommend] != 10 {
+		t.Fatalf("recommend count = %d, want capped 10", snapshot.Counts[domain.SourceRecommend])
+	}
+	for idx, entry := range snapshot.Entries {
+		wantID := items[idx].ID
+		if entry.Item.ID != wantID {
+			t.Fatalf("recommend entry %d = %s, want %s", idx, entry.Item.ID, wantID)
+		}
+	}
+}
+
+func TestRecommendFeedSurfacesSavedSourceInTopTen(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+
+	now := time.Date(2026, 5, 10, 10, 0, 0, 0, time.UTC)
+	items := make([]domain.FeedItem, 0, 15)
+	aiSeed := appTestSourceItem("hn-ai-seed", "hackernews:ai-seed", "Saved AI seed", domain.SourceHackerNews, 1, now.Add(time.Minute))
+	aiSeed.Tags = []string{"ai"}
+	aiSeed.Language = "go"
+	aiSeed.Author = "acme"
+	items = append(items, aiSeed)
+	for rank := 1; rank <= 12; rank++ {
+		item := appTestSourceItem(
+			fmt.Sprintf("hn-ai-%02d", rank),
+			fmt.Sprintf("hackernews:ai-%02d", rank),
+			fmt.Sprintf("AI candidate %02d", rank),
+			domain.SourceHackerNews,
+			rank,
+			now.Add(time.Duration(rank)*time.Second),
+		)
+		item.Tags = []string{"ai"}
+		item.Language = "go"
+		item.Author = "acme"
+		items = append(items, item)
+	}
+	githubOne := appTestSourceItem("gh-one", "repo:owner/one", "owner/one", domain.SourceGitHub, 25, now)
+	githubTwo := appTestSourceItem("gh-two", "repo:owner/two", "owner/two", domain.SourceGitHub, 26, now.Add(time.Second))
+	items = append(items, githubOne, githubTwo)
+	if err := db.UpsertFeedItems(ctx, items); err != nil {
+		t.Fatal(err)
+	}
+	for _, itemID := range []string{aiSeed.ID, githubOne.ID, githubTwo.ID} {
+		if err := db.SetSaved(ctx, itemID, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	service := NewService(db, httpx.New(time.Second), nil)
+
+	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !snapshotHasSource(snapshot, domain.SourceGitHub) {
+		t.Fatalf("recommend ids = %+v, want saved GitHub source represented in top 10", appEntryIDs(snapshot.Entries))
+	}
+}
+
+func TestRecommendFeedUsesLatestCachedFeedOnly(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+
+	now := time.Date(2026, 5, 10, 10, 0, 0, 0, time.UTC)
+	const latestFeedLimit = 250
+	recent := make([]domain.FeedItem, 0, latestFeedLimit)
+	for idx := 0; idx < latestFeedLimit; idx++ {
+		recent = append(recent, appTestSourceItem(
+			fmt.Sprintf("recent-%03d", idx),
+			fmt.Sprintf("hackernews:recent-%03d", idx),
+			fmt.Sprintf("Recent item %03d", idx),
+			domain.SourceHackerNews,
+			idx+1,
+			now.Add(time.Duration(idx)*time.Second),
+		))
+	}
+	oldBoosted := appTestSourceItem("old-sqlite", "hackernews:old-sqlite", "SQLite old hit", domain.SourceHackerNews, 1, now.Add(-24*time.Hour))
+	if err := db.UpsertFeedItems(ctx, append(recent, oldBoosted)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.CreatePersonalizationRule(ctx, domain.PersonalizationRule{
+		Effect:  domain.RuleEffectBoost,
+		Target:  domain.RuleTargetKeyword,
+		Value:   "sqlite",
+		Enabled: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(db, httpx.New(time.Second), nil)
+
+	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(appEntryIDs(snapshot.Entries), oldBoosted.ID) {
+		t.Fatalf("recommend ids = %+v, old item outside latest feed should not be recommended", appEntryIDs(snapshot.Entries))
+	}
+}
+
+func TestRecommendFeedExcludesMutedHiddenAndDisabledSources(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+
+	now := time.Date(2026, 5, 10, 10, 0, 0, 0, time.UTC)
+	kept := appTestSourceItem("hn-keep", "hackernews:keep", "AI kept", domain.SourceHackerNews, 1, now)
+	muted := appTestSourceItem("hn-muted", "hackernews:muted", "AI muted", domain.SourceHackerNews, 2, now)
+	hiddenByRule := appTestSourceItem("hn-sponsored", "hackernews:sponsored", "AI sponsored", domain.SourceHackerNews, 3, now)
+	durableHidden := appTestSourceItem("hn-hidden", "hackernews:hidden", "AI hidden", domain.SourceHackerNews, 4, now)
+	disabledSource := appTestSourceItem("gh-ai", "repo:owner/ai", "AI github", domain.SourceGitHub, 1, now)
+	if err := db.UpsertFeedItems(ctx, []domain.FeedItem{kept, muted, hiddenByRule, durableHidden, disabledSource}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetHidden(ctx, durableHidden.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	for _, rule := range []domain.PersonalizationRule{
+		{Effect: domain.RuleEffectBoost, Target: domain.RuleTargetKeyword, Value: "ai", Enabled: true},
+		{Effect: domain.RuleEffectMute, Target: domain.RuleTargetKeyword, Value: "muted", Enabled: true},
+		{Effect: domain.RuleEffectHide, Target: domain.RuleTargetKeyword, Value: "sponsored", Enabled: true},
+	} {
+		if _, err := db.CreatePersonalizationRule(ctx, rule); err != nil {
+			t.Fatal(err)
+		}
+	}
+	service := NewService(db, httpx.New(time.Second), nil)
+	service.SetSourceConfig([]domain.SourceID{domain.SourceHackerNews}, nil)
+
+	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{IncludeHidden: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := appEntryIDs(snapshot.Entries)
+	if !reflect.DeepEqual(ids, []string{kept.ID}) {
+		t.Fatalf("recommend ids = %+v, want only kept HN item", ids)
+	}
+}
+
+func TestRecommendFeedRecomputesAfterRuleAndStateChanges(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+
+	item := appTestSourceItem("hn-sqlite", "hackernews:sqlite", "SQLite launch", domain.SourceHackerNews, 1, time.Date(2026, 5, 10, 10, 0, 0, 0, time.UTC))
+	if err := db.UpsertFeedItems(ctx, []domain.FeedItem{item}); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(db, httpx.New(time.Second), nil)
+
+	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Entries) != 0 {
+		t.Fatalf("cold recommend entries = %+v, want empty", snapshot.Entries)
+	}
+	snapshot, err = service.CreatePersonalizationRule(ctx, domain.PersonalizationRule{
+		Effect:  domain.RuleEffectBoost,
+		Target:  domain.RuleTargetKeyword,
+		Value:   "sqlite",
+		Enabled: true,
+	}, domain.SourceRecommend, FeedFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Entries) != 1 || snapshot.Entries[0].Item.ID != item.ID {
+		t.Fatalf("recommend after boost = %+v, want sqlite item", snapshot.Entries)
+	}
+	snapshot, err = service.SetHidden(ctx, item.ID, true, domain.SourceRecommend, FeedFilter{IncludeHidden: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Entries) != 0 {
+		t.Fatalf("recommend after hide = %+v, want empty despite IncludeHidden", snapshot.Entries)
+	}
+}
+
+func TestRecommendFeedRecomputesStaleScoresWhenOpened(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+
+	now := time.Date(2026, 5, 10, 10, 0, 0, 0, time.UTC)
+	hnSeed := appTestSourceItem("hn-seed", "hackernews:seed", "Saved HN seed", domain.SourceHackerNews, 1, now)
+	githubOne := appTestSourceItem("gh-one", "repo:owner/one", "owner/one", domain.SourceGitHub, 1, now.Add(time.Minute))
+	githubTwo := appTestSourceItem("gh-two", "repo:owner/two", "owner/two", domain.SourceGitHub, 2, now.Add(2*time.Minute))
+	if err := db.UpsertFeedItems(ctx, []domain.FeedItem{hnSeed}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetSaved(ctx, hnSeed.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(db, httpx.New(time.Second), nil)
+	if _, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.UpsertFeedItems(ctx, []domain.FeedItem{githubOne, githubTwo}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetSaved(ctx, githubOne.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetSaved(ctx, githubTwo.ID, true); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !snapshotHasSource(snapshot, domain.SourceGitHub) {
+		t.Fatalf("stale recommend scores did not refresh saved GitHub interest: ids=%+v", appEntryIDs(snapshot.Entries))
+	}
+}
+
+func TestRecommendVisibleRefreshRefreshesPrimaryScopes(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+
+	hn := &fakeAdapter{source: domain.SourceHackerNews, items: []domain.FeedItem{appTestItem("hn-1", "hackernews:1", "HN")}}
+	github := &fakeAdapter{
+		source: domain.SourceGitHub,
+		items:  []domain.FeedItem{appTestSourceItem("repo-1", "repo:owner/repo", "owner/repo", domain.SourceGitHub, 1, time.Date(2026, 5, 10, 10, 0, 0, 0, time.UTC))},
+	}
+	service := NewService(db, httpx.New(time.Second), []SourceAdapter{hn, github})
+
+	if _, err := service.Refresh(ctx, domain.SourceRecommend, FeedFilter{}, RefreshOptions{Mode: RefreshModeVisible}); err != nil {
+		t.Fatal(err)
+	}
+	if len(hn.calls) == 0 || len(github.calls) == 0 {
+		t.Fatalf("recommend visible refresh calls: hn=%+v github=%+v, want both sources", hn.calls, github.calls)
 	}
 }
 
@@ -1637,6 +1955,14 @@ func snapshotHasSource(snapshot Snapshot, source domain.SourceID) bool {
 		}
 	}
 	return false
+}
+
+func appEntryIDs(entries []domain.FeedEntry) []string {
+	ids := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		ids = append(ids, entry.Item.ID)
+	}
+	return ids
 }
 
 func assertScopeViews(t *testing.T, scopes []domain.FetchScope, want []string) {

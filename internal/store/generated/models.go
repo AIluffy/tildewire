@@ -130,6 +130,14 @@ type RateLimitState struct {
 	UpdatedAt     string
 }
 
+type RecommendationScore struct {
+	ItemID        string
+	Score         float64
+	InterestScore float64
+	HotScore      float64
+	ComputedAt    string
+}
+
 type Source struct {
 	ID            string
 	Name          string

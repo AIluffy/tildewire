@@ -45,6 +45,9 @@ func SourceIDs() []domain.SourceID {
 
 // SourceLabel returns the user-facing source name.
 func SourceLabel(source domain.SourceID) string {
+	if source == domain.SourceRecommend {
+		return "Recommend"
+	}
 	for _, entry := range SourceCatalog() {
 		if entry.Source == source {
 			return entry.Label
@@ -55,6 +58,9 @@ func SourceLabel(source domain.SourceID) string {
 
 // SourceShortLabel returns the compact source label used in status text.
 func SourceShortLabel(source domain.SourceID) string {
+	if source == domain.SourceRecommend {
+		return "REC"
+	}
 	for _, entry := range SourceCatalog() {
 		if entry.Source == source {
 			return entry.ShortLabel
@@ -65,6 +71,9 @@ func SourceShortLabel(source domain.SourceID) string {
 
 // SourceBadge returns the compact source badge text.
 func SourceBadge(source domain.SourceID) string {
+	if source == domain.SourceRecommend {
+		return "RC"
+	}
 	for _, entry := range SourceCatalog() {
 		if entry.Source == source {
 			return entry.Badge

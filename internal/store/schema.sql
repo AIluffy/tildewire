@@ -139,6 +139,14 @@ CREATE TABLE IF NOT EXISTS dedupe_decisions (
   decided_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS recommendation_scores (
+  item_id TEXT PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+  score REAL NOT NULL,
+  interest_score REAL NOT NULL,
+  hot_score REAL NOT NULL,
+  computed_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_items_last_seen ON items(last_seen_at DESC);
 CREATE INDEX IF NOT EXISTS idx_items_published ON items(published_at DESC);
 CREATE INDEX IF NOT EXISTS idx_items_canonical_url ON items(canonical_url);
@@ -152,6 +160,7 @@ CREATE INDEX IF NOT EXISTS idx_item_state_hidden ON item_state(hidden);
 CREATE INDEX IF NOT EXISTS idx_fetch_history_started ON fetch_history(started_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_personalization_rules_enabled ON personalization_rules(enabled, effect, target);
 CREATE INDEX IF NOT EXISTS idx_dedupe_candidates_score ON dedupe_candidates(score DESC, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_recommendation_scores_score ON recommendation_scores(score DESC, computed_at DESC);
 
 INSERT OR IGNORE INTO sources (id, name, status) VALUES
   ('hackernews', 'Hacker News', 'UNKNOWN'),

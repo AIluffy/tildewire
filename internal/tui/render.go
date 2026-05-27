@@ -161,6 +161,8 @@ func (m Model) renderPanel(box panelBox, content string, focused bool) string {
 func (m Model) renderHeader() string {
 	view := "All"
 	switch m.view {
+	case domain.SourceRecommend:
+		view = "Recommend"
 	case domain.SourceGitHub:
 		view = "Trending"
 	case domain.SourceHackerNews:
@@ -234,6 +236,10 @@ func (m Model) renderFeed(width, height int) string {
 	if len(m.entries) == 0 {
 		if m.refreshing {
 			lines = append(lines, m.loadingLines(width)...)
+			return fillLines(lines, height)
+		}
+		if m.view == domain.SourceRecommend {
+			lines = append(lines, m.styles.muted.Render("No recommendations yet."), m.styles.muted.Render("Save or boost items to train Recommend."))
 			return fillLines(lines, height)
 		}
 		lines = append(lines, m.styles.muted.Render("No cached items yet."), m.styles.muted.Render("Press r to refresh."))

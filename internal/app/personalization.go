@@ -9,9 +9,11 @@ import (
 )
 
 const (
-	explicitRuleWeight = 0.50
-	implicitSignalUnit = 0.04
-	implicitSignalCap  = 0.20
+	explicitRuleWeight             = 0.50
+	implicitSignalUnit             = 0.04
+	implicitSignalCap              = 0.20
+	recommendationSourceSignalUnit = 0.12
+	recommendationSourceSignalCap  = 0.30
 )
 
 func filterPersonalizedHidden(entries []domain.FeedEntry, rules []domain.PersonalizationRule) []domain.FeedEntry {
@@ -44,6 +46,27 @@ func personalizationAdjustment(entry domain.FeedEntry, rules []domain.Personaliz
 	adjustment += implicitPreferenceAdjustment(entry, profile.SavedTags, profile.SavedLanguages, profile.SavedRepos, profile.SavedAuthors, profile.SavedSources)
 	adjustment -= implicitPreferenceAdjustment(entry, profile.HiddenTags, profile.HiddenLanguages, profile.HiddenRepos, profile.HiddenAuthors, profile.HiddenSources)
 	return adjustment
+}
+
+func recommendationInterestScore(entry domain.FeedEntry, rules []domain.PersonalizationRule, profile domain.PreferenceProfile) (float64, bool) {
+	positive := 0.0
+	negative := 0.0
+	for _, rule := range rules {
+		if !rule.Enabled || !ruleMatchesEntry(rule, entry) {
+			continue
+		}
+		switch rule.Effect {
+		case domain.RuleEffectBoost:
+			positive += explicitRuleWeight
+		case domain.RuleEffectMute:
+			negative += explicitRuleWeight
+		}
+	}
+	positive += implicitPreferenceAdjustment(entry, profile.SavedTags, profile.SavedLanguages, profile.SavedRepos, profile.SavedAuthors, profile.SavedSources)
+	negative += implicitPreferenceAdjustment(entry, profile.HiddenTags, profile.HiddenLanguages, profile.HiddenRepos, profile.HiddenAuthors, profile.HiddenSources)
+	positive += recommendationSourceSignal(entry, profile.SavedSources)
+	negative += recommendationSourceSignal(entry, profile.HiddenSources)
+	return positive - negative, positive > 0
 }
 
 func hasMatchingRule(entry domain.FeedEntry, rules []domain.PersonalizationRule, effect domain.RuleEffect) bool {
@@ -105,6 +128,23 @@ func implicitPreferenceAdjustment(entry domain.FeedEntry, tags, languages, repos
 		score += signalWeight(sources[key])
 	}
 	return math.Min(score, implicitSignalCap)
+}
+
+func recommendationSourceSignal(entry domain.FeedEntry, sources map[string]int) float64 {
+	if len(entry.Sources) == 0 || len(sources) == 0 {
+		return 0
+	}
+	score := 0.0
+	seenSources := make(map[string]bool, len(entry.Sources))
+	for _, source := range entry.Sources {
+		key := strings.ToLower(string(source.Source))
+		if seenSources[key] {
+			continue
+		}
+		seenSources[key] = true
+		score += math.Min(float64(sources[key])*recommendationSourceSignalUnit, recommendationSourceSignalCap)
+	}
+	return math.Min(score, recommendationSourceSignalCap)
 }
 
 func signalWeight(count int) float64 {

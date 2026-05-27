@@ -214,7 +214,7 @@ func (m Model) applySettingsState(cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	}
 	m.settingsOpen = false
 	m.message = "settings saved"
-	return m, tea.Batch(cmd, m.saveSettingsCmd(next))
+	return m, batchCommands(cmd, m.saveSettingsCmd(next), m.loadCmd())
 }
 
 func (m *Model) openSettingsForm() {

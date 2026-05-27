@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Service) preferenceProfileForView(ctx context.Context, view domain.SourceID) (domain.PreferenceProfile, error) {
-	if view != "" && view != domain.SourceAll {
+	if view != "" && view != domain.SourceAll && view != domain.SourceRecommend {
 		return domain.PreferenceProfile{}, nil
 	}
 	return s.store.PreferenceProfile(ctx)
@@ -26,7 +26,7 @@ func (s *Service) sourceTabCounts(ctx context.Context) (map[domain.SourceID]int,
 	if err != nil {
 		return nil, err
 	}
-	counts := make(map[domain.SourceID]int, len(s.sources)+1)
+	counts := make(map[domain.SourceID]int, len(s.sources)+2)
 	for _, source := range s.sources {
 		counts[source] = storedCounts[source]
 	}
@@ -41,8 +41,17 @@ func (s *Service) sourceTabCounts(ctx context.Context) (map[domain.SourceID]int,
 		}
 		counts[source] = total
 	}
+	recommendCount, err := s.store.CountRecommendedFeed(ctx, domain.FeedQuery{})
+	if err != nil {
+		return nil, err
+	}
+	counts[domain.SourceRecommend] = capRecommendCount(recommendCount)
 	counts[domain.SourceAll] = sumSourceCounts(counts, s.sources)
 	return counts, nil
+}
+
+func capRecommendCount(count int) int {
+	return min(count, recommendDisplayLimit)
 }
 
 func (s *Service) primarySourceViewKeys(source domain.SourceID) []string {
@@ -81,7 +90,7 @@ func (s *Service) filterEntriesForEnabledSources(entries []domain.FeedEntry, vie
 	filtered := make([]domain.FeedEntry, 0, len(entries))
 	for _, entry := range entries {
 		sources := s.filterItemSourcesForEnabledSources(entry.Sources)
-		if len(sources) == 0 && (view == "" || view == domain.SourceAll) {
+		if len(sources) == 0 && (view == "" || view == domain.SourceAll || view == domain.SourceRecommend) {
 			continue
 		}
 		entry.Sources = sources
@@ -131,7 +140,7 @@ func (s *Service) filterFetchHistoryForEnabledSources(events []domain.FetchEvent
 }
 
 func (s *Service) sourceEnabled(source domain.SourceID) bool {
-	if source == "" || source == domain.SourceAll {
+	if source == "" || source == domain.SourceAll || source == domain.SourceRecommend {
 		return true
 	}
 	if len(s.enabled) == 0 {
@@ -159,7 +168,7 @@ func enabledSourceSet(sources []domain.SourceID) map[domain.SourceID]bool {
 	}
 	enabled := make(map[domain.SourceID]bool, len(sources))
 	for _, source := range sources {
-		if source == "" || source == domain.SourceAll {
+		if source == "" || source == domain.SourceAll || source == domain.SourceRecommend {
 			continue
 		}
 		enabled[source] = true
@@ -201,6 +210,10 @@ func normalizeFilter(filter FeedFilter) FeedFilter {
 
 func normalizeViewFilter(view domain.SourceID, filter FeedFilter) FeedFilter {
 	filter = normalizeFilter(filter)
+	if view == domain.SourceRecommend {
+		filter.SourceView = ""
+		return filter
+	}
 	if view != "" && view != domain.SourceAll && filter.SourceView == "" {
 		filter.SourceView = DefaultFeedSourceView(view)
 	}
