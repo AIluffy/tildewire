@@ -134,6 +134,24 @@ func TestImageManagerAcceptNewestRenderResultWins(t *testing.T) {
 	}
 }
 
+func TestImageManagerAcceptDoesNotCacheErrorPlaceholder(t *testing.T) {
+	manager := newImageManager(ImageManagerConfig{}, withTerminalProbe(fakeTerminalProbe{tty: true, utf8: true}))
+	req := ImageRequest{ID: "bad", Path: writeManagerPNG(t, "bad.png"), Rect: CellRect{Width: 16, Height: 4}, AltText: "Broken image"}
+	msg := RenderedMsg{
+		Version: 1,
+		Request: req,
+		Image:   Placeholder(req),
+		Err:     &RenderError{Kind: ErrDecodeFailed, Protocol: ProtocolHalfblocks, Path: req.Path, Message: "decode failed"},
+	}
+
+	if !manager.Accept(msg) {
+		t.Fatal("error render result should still be accepted for version accounting")
+	}
+	if got := manager.Rendered(req); got.FromCache {
+		t.Fatalf("error placeholder was cached: %#v", got)
+	}
+}
+
 func TestRenderImageAsyncDecodeFailureReturnsPlaceholder(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "bad.png")
 	if err := os.WriteFile(path, []byte("not an image"), 0o644); err != nil {

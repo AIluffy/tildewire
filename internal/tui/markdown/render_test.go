@@ -188,6 +188,89 @@ func TestRenderInlineCodeUsesLightBackgroundOnLightTerminal(t *testing.T) {
 	}
 }
 
+func TestRenderMultilineHTMLTextParagraphAsMarkdownText(t *testing.T) {
+	markdown := strings.Join([]string{
+		`<p align="center">`,
+		`  <strong>Turn any codebase, knowledge base, or docs into an interactive knowledge graph you can explore, search, and ask questions about.</strong>`,
+		`  <br />`,
+		`  <em>Works with Claude Code, Codex, Cursor, Copilot, Gemini CLI, and more.</em>`,
+		`</p>`,
+	}, "\n")
+
+	rendered, err := Render(markdown, Options{Style: "dark", Width: 96})
+	if err != nil {
+		t.Fatalf("render markdown: %v", err)
+	}
+	visible := ansi.Strip(rendered)
+	for _, want := range []string{"Turn any codebase", "interactive knowledge graph", "Works with Claude Code"} {
+		if !strings.Contains(visible, want) {
+			t.Fatalf("rendered HTML paragraph missing %q:\n%s", want, visible)
+		}
+	}
+	for _, forbidden := range []string{"<p", "<strong", "<br", "<em", "+---", "|Turn any"} {
+		if strings.Contains(visible, forbidden) {
+			t.Fatalf("rendered HTML paragraph leaked %q:\n%s", forbidden, visible)
+		}
+	}
+}
+
+func TestRenderLinkedHTMLImageLineAsImageSegment(t *testing.T) {
+	markdown := `<p align="center">
+  <a href="https://trendshift.io/repositories/23482" target="_blank"><img src="https://trendshift.io/api/badge/repositories/23482" alt="Lum1104%2FUnderstand-Anything | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+</p>`
+
+	rendered, err := Render(markdown, Options{
+		Style:         "dark",
+		Width:         96,
+		ImageSegments: false,
+		ImageMode:     config.MarkdownImagePreviewOff,
+	})
+	if err != nil {
+		t.Fatalf("render markdown: %v", err)
+	}
+	visible := ansi.Strip(rendered)
+	if !strings.Contains(visible, "Image: Lum1104%2FUnderstand-Anything | Trendshift") {
+		t.Fatalf("rendered linked HTML image missing placeholder:\n%s", visible)
+	}
+	for _, forbidden := range []string{"<p", "<a", "<img", "+---", "|Lum1104"} {
+		if strings.Contains(visible, forbidden) {
+			t.Fatalf("rendered linked HTML image leaked %q:\n%s", forbidden, visible)
+		}
+	}
+}
+
+func TestRenderGitHubStyleHTMLHeaderWithoutRawHTMLBlocks(t *testing.T) {
+	markdown := strings.Join([]string{
+		`<h1 align="center">Understand Anything</h1>`,
+		``,
+		`<p align="center">`,
+		`  <strong>Turn any codebase, knowledge base, or docs into an interactive knowledge graph you can explore, search, and ask questions about.</strong>`,
+		`  <br />`,
+		`  <em>Works with Claude Code, Codex, Cursor, Copilot, Gemini CLI, and more.</em>`,
+		`</p>`,
+		``,
+		`<p align="center">`,
+		`  <a href="README.md">English</a> | <a href="READMEs/README.zh-CN.md">简体中文</a> | <a href="READMEs/README.ja-JP.md">日本語</a>`,
+		`</p>`,
+	}, "\n")
+
+	rendered, err := Render(markdown, Options{Style: "dark", Width: 96})
+	if err != nil {
+		t.Fatalf("render markdown: %v", err)
+	}
+	visible := ansi.Strip(rendered)
+	for _, want := range []string{"Understand Anything", "Turn any codebase", "Works with Claude Code", "English", "简体中文", "日本語"} {
+		if !strings.Contains(visible, want) {
+			t.Fatalf("rendered GitHub-style header missing %q:\n%s", want, visible)
+		}
+	}
+	for _, forbidden := range []string{"<h1", "<p", "<a href", "<strong", "<em", "+---"} {
+		if strings.Contains(visible, forbidden) {
+			t.Fatalf("rendered GitHub-style header leaked %q:\n%s", forbidden, visible)
+		}
+	}
+}
+
 func TestCodeBlockPaletteUsesTableBorderColor(t *testing.T) {
 	palette := codeBlockPaletteFor(Options{
 		DarkBackground:     true,

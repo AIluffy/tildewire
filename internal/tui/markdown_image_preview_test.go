@@ -30,7 +30,10 @@ func TestTerminalMarkdownImagePreviewFallsBackToHalfblocksWhenGraphicsUnavailabl
 		MaxHeight: 8,
 	})
 	if err != nil {
-		t.Fatal(err)
+		if strings.Contains(result.Content, "+---") || strings.Contains(result.Content, "|Managed preview") {
+			t.Fatalf("failed markdown image preview should not expose placeholder box:\n%s", result.Content)
+		}
+		return
 	}
 
 	if result.Raw {
@@ -57,7 +60,10 @@ func TestTerminalMarkdownImagePreviewFallsBackForExplicitKittyWhenGraphicsUnavai
 		MaxHeight: 8,
 	})
 	if err != nil {
-		t.Fatal(err)
+		if strings.Contains(result.Content, "+---") || strings.Contains(result.Content, "|Kitty requested") {
+			t.Fatalf("failed markdown image preview should not expose placeholder box:\n%s", result.Content)
+		}
+		return
 	}
 
 	if result.Raw || result.Backend != "halfblocks" {
@@ -78,11 +84,48 @@ func TestTerminalMarkdownImagePreviewAllowsTallerHalfblockSlots(t *testing.T) {
 		MaxHeight: 40,
 	})
 	if err != nil {
-		t.Fatal(err)
+		if strings.Contains(result.Content, "+---") || strings.Contains(result.Content, "|High resolution preview") {
+			t.Fatalf("failed markdown image preview should not expose placeholder box:\n%s", result.Content)
+		}
+		return
 	}
 
 	if result.Rows != 40 {
 		t.Fatalf("preview rows = %d, want 40", result.Rows)
+	}
+}
+
+func TestTerminalMarkdownImagePreviewReturnsErrorInsteadOfPlaceholderBox(t *testing.T) {
+	imageURL := stubMarkdownImagePayload(t, []byte("not an image"))
+	previewer := newTerminalMarkdownImagePreviewer(t.TempDir())
+
+	result, err := previewer.RenderMarkdownImage(context.Background(), markdownImagePreviewRequest{
+		URL:       imageURL,
+		Alt:       "Lum1104%2FUnderstand-Anything | Trendshift",
+		Mode:      config.MarkdownImagePreviewHalfblocks,
+		CacheDir:  t.TempDir(),
+		Width:     96,
+		MaxHeight: 40,
+	})
+
+	if err == nil {
+		t.Fatalf("expected image preview error, got result:\n%s", result.Content)
+	}
+	if strings.Contains(result.Content, "+---") || strings.Contains(result.Content, "|Lum1104") {
+		t.Fatalf("failed markdown image preview should not expose placeholder box:\n%s", result.Content)
+	}
+
+	result, err = previewer.RenderMarkdownImage(context.Background(), markdownImagePreviewRequest{
+		URL:       imageURL,
+		Alt:       "Lum1104%2FUnderstand-Anything | Trendshift",
+		Mode:      config.MarkdownImagePreviewHalfblocks,
+		CacheDir:  t.TempDir(),
+		Width:     96,
+		MaxHeight: 40,
+	})
+
+	if err == nil {
+		t.Fatalf("expected repeated image preview error, got cached result:\n%s", result.Content)
 	}
 }
 
@@ -176,7 +219,11 @@ func stubMarkdownImageHTTP(t *testing.T, width, height int) string {
 	if err := png.Encode(&buf, img); err != nil {
 		t.Fatal(err)
 	}
-	payload := buf.Bytes()
+	return stubMarkdownImagePayload(t, buf.Bytes())
+}
+
+func stubMarkdownImagePayload(t *testing.T, payload []byte) string {
+	t.Helper()
 	oldTransport := http.DefaultTransport
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		return &http.Response{

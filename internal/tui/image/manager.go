@@ -155,7 +155,7 @@ func (m *ImageManager) Accept(msg RenderedMsg) bool {
 	if msg.Err != nil && msg.Err.Kind == ErrProtocolFailed && msg.Err.Protocol != ProtocolHalfblocks {
 		m.recordProtocolFailureLocked()
 	}
-	if msg.Image.Cells == "" {
+	if msg.Err != nil || msg.Image.Cells == "" {
 		return true
 	}
 	if err := m.cache.PutRendered(m.normalizeRequest(msg.Request), msg.Image.Protocol, m.metrics, msg.Image); err != nil {

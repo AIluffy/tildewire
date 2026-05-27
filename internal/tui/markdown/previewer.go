@@ -92,7 +92,7 @@ func (p *TerminalImagePreviewer) RenderMarkdownImage(ctx context.Context, reques
 		AltText: request.Alt,
 	})
 	manager.Accept(msg)
-	if strings.TrimSpace(msg.Image.Cells) == "" && msg.Err != nil {
+	if msg.Err != nil {
 		return ImageResult{}, msg.Err
 	}
 	return ImageResult{
