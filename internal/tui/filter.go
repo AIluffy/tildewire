@@ -30,6 +30,7 @@ func (m *Model) openFilter() {
 	m.health = false
 	m.rulesOpen = false
 	m.dedupeOpen = false
+	m.recommendDiagnosticsOpen = false
 	m.paletteOpen = false
 	m.message = "filter"
 }

@@ -28,6 +28,7 @@ func (m *Model) openRulesPanel() {
 	m.filterOpen = false
 	m.health = false
 	m.dedupeOpen = false
+	m.recommendDiagnosticsOpen = false
 	m.ruleForm = nil
 	m.paletteOpen = false
 	m.message = "personalization rules"
@@ -40,9 +41,25 @@ func (m *Model) openDedupePanel() {
 	m.filterOpen = false
 	m.health = false
 	m.rulesOpen = false
+	m.recommendDiagnosticsOpen = false
 	m.ruleForm = nil
 	m.paletteOpen = false
 	m.message = "dedupe candidates"
+}
+
+func (m *Model) openRecommendDiagnosticsPanel() {
+	m.recommendDiagnosticsOpen = true
+	m.recommendDiagnosticsLoading = true
+	m.recommendDiagnostics = domain.RecommendationDiagnostics{}
+	m.recommendDiagnosticsError = ""
+	m.detail = false
+	m.filterOpen = false
+	m.health = false
+	m.rulesOpen = false
+	m.dedupeOpen = false
+	m.ruleForm = nil
+	m.paletteOpen = false
+	m.message = "recommend diagnostics"
 }
 
 func (m Model) handleRulesKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {

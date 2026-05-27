@@ -254,6 +254,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refreshDetailContentCache()
 		m.clampDetailOffset()
 		return m, m.drawDetailRawImagesCmd()
+	case recommendDiagnosticsMsg:
+		m.recommendDiagnosticsLoading = false
+		if msg.err != nil {
+			m.recommendDiagnostics = domain.RecommendationDiagnostics{}
+			m.recommendDiagnosticsError = msg.err.Error()
+			m.message = "recommend diagnostics unavailable"
+			return m, nil
+		}
+		m.recommendDiagnostics = msg.diagnostics
+		m.recommendDiagnosticsError = ""
+		m.message = "recommend diagnostics"
+		return m, nil
 	case detailRawImageRedrawMsg:
 		if msg.drawID != m.detailRawImageDrawID ||
 			msg.itemID != m.detailEntryID ||
@@ -427,10 +439,8 @@ func mergeBackgroundCounts(current, incoming map[domain.SourceID]int, active dom
 		merged[source] = count
 	}
 	total := 0
-	for source, count := range merged {
-		if source != domain.SourceAll {
-			total += count
-		}
+	for _, source := range app.SourceIDs() {
+		total += merged[source]
 	}
 	merged[domain.SourceAll] = total
 	return merged

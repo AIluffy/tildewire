@@ -232,6 +232,7 @@ func (m *Model) openSettingsForm() {
 		m.settingsDraft.Theme = config.ThemeCatppuccin
 	}
 	m.settingsOpen = true
+	m.recommendDiagnosticsOpen = false
 	m.settingsShowGitHubToken = false
 	m.settingsShowProductHuntToken = false
 	if m.settingsCursor < 0 || m.settingsCursor >= len(settingsFocusableFields) {

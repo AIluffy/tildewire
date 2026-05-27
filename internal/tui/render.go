@@ -68,6 +68,9 @@ func (m Model) render() string {
 	if m.dedupeOpen {
 		return m.renderDedupeCandidates()
 	}
+	if m.recommendDiagnosticsOpen {
+		return m.renderRecommendDiagnostics()
+	}
 	if m.health {
 		return m.renderHealth()
 	}

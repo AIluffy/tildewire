@@ -109,6 +109,51 @@ type RecommendationProfileTerm struct {
 	Reasons  []RecommendationReason
 }
 
+// RecommendationExclusionReason explains why an item is not eligible for Recommend.
+type RecommendationExclusionReason string
+
+const (
+	RecommendationExclusionNone             RecommendationExclusionReason = ""
+	RecommendationExclusionNoSelection      RecommendationExclusionReason = "no selected item"
+	RecommendationExclusionHidden           RecommendationExclusionReason = "hidden item"
+	RecommendationExclusionHideRule         RecommendationExclusionReason = "hide rule"
+	RecommendationExclusionDisabledSource   RecommendationExclusionReason = "disabled source"
+	RecommendationExclusionOutsideWindow    RecommendationExclusionReason = "outside latest feed window"
+	RecommendationExclusionNoPositiveSignal RecommendationExclusionReason = "no positive signal"
+	RecommendationExclusionNonPositiveScore RecommendationExclusionReason = "non-positive score"
+)
+
+// RecommendationDiagnostics explains the current Recommend profile and one selected item.
+type RecommendationDiagnostics struct {
+	PositiveTerms []RecommendationProfileTerm
+	NegativeTerms []RecommendationProfileTerm
+	Selected      RecommendationDiagnosticsItem
+}
+
+// RecommendationDiagnosticsItem is a score breakdown for one item against Recommend.
+type RecommendationDiagnosticsItem struct {
+	ItemID            string
+	Title             string
+	InterestScore     float64
+	HotScore          float64
+	Score             float64
+	HasPositiveSignal bool
+	Eligible          bool
+	ExclusionReason   string
+	MatchedTerms      []RecommendationDiagnosticsTerm
+	Reasons           []RecommendationReason
+}
+
+// RecommendationDiagnosticsTerm is one selected-item term matched against the profile.
+type RecommendationDiagnosticsTerm struct {
+	Kind         string
+	Value        string
+	ItemWeight   float64
+	Positive     float64
+	Negative     float64
+	Contribution float64
+}
+
 // RecommendationReason is a short explainable reason attached to a recommended entry.
 type RecommendationReason struct {
 	Kind   string  `json:"kind"`

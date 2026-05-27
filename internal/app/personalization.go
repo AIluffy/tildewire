@@ -82,8 +82,13 @@ func recommendationInterestScore(entry domain.FeedEntry, rules []domain.Personal
 }
 
 func recommendationProfileAdjustment(entry domain.FeedEntry, profile domain.RecommendationProfile) (float64, float64, []domain.RecommendationReason) {
+	positive, negative, reasons, _ := recommendationProfileMatches(entry, profile)
+	return positive, negative, reasons
+}
+
+func recommendationProfileMatches(entry domain.FeedEntry, profile domain.RecommendationProfile) (float64, float64, []domain.RecommendationReason, []domain.RecommendationDiagnosticsTerm) {
 	if len(profile.Terms) == 0 {
-		return 0, 0, nil
+		return 0, 0, nil, nil
 	}
 	item := entry.Item
 	item.Sources = entry.Sources
@@ -92,6 +97,7 @@ func recommendationProfileAdjustment(entry domain.FeedEntry, profile domain.Reco
 	otherNegative := 0.0
 	sourceNegative := 0.0
 	var reasons []domain.RecommendationReason
+	var matchedTerms []domain.RecommendationDiagnosticsTerm
 	for _, term := range recommend.TermsForItem(item) {
 		profileTerm, ok := profile.Terms[recommend.TermKey(term.Kind, term.Value)]
 		if !ok {
@@ -106,6 +112,14 @@ func recommendationProfileAdjustment(entry domain.FeedEntry, profile domain.Reco
 			otherPositive += positive
 			otherNegative += negative
 		}
+		matchedTerms = append(matchedTerms, domain.RecommendationDiagnosticsTerm{
+			Kind:         term.Kind,
+			Value:        term.Value,
+			ItemWeight:   term.Weight,
+			Positive:     positive,
+			Negative:     negative,
+			Contribution: positive - negative,
+		})
 		for _, reason := range profileTerm.Reasons {
 			reason.Weight *= term.Weight
 			reasons = append(reasons, reason)
@@ -113,7 +127,7 @@ func recommendationProfileAdjustment(entry domain.FeedEntry, profile domain.Reco
 	}
 	positive := math.Min(otherPositive, recommendationOtherSignalCap) + math.Min(sourcePositive, recommendationSourceCap)
 	negative := math.Min(otherNegative, recommendationOtherSignalCap) + math.Min(sourceNegative, recommendationSourceNegativeCap)
-	return positive, negative, recommend.TopReasons(reasons, 4)
+	return positive, negative, recommend.TopReasons(reasons, 4), matchedTerms
 }
 
 func hasMatchingRule(entry domain.FeedEntry, rules []domain.PersonalizationRule, effect domain.RuleEffect) bool {

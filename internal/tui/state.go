@@ -69,26 +69,30 @@ type detailState struct {
 }
 
 type overlayState struct {
-	paletteOpen     bool
-	paletteFilter   string
-	paletteCursor   int
-	paletteOffset   int
-	filterOpen      bool
-	filterDraft     app.FeedFilter
-	filterDraftView domain.SourceID
-	filterCursor    int
-	health          bool
-	rulesOpen       bool
-	ruleCursor      int
-	ruleForm        *huh.Form
-	ruleDraft       ruleDraft
-	ruleEditingID   int64
-	dedupeOpen      bool
-	dedupeCursor    int
-	message         string
-	lastError       string
-	toast           string
-	toastID         int
+	paletteOpen                 bool
+	paletteFilter               string
+	paletteCursor               int
+	paletteOffset               int
+	filterOpen                  bool
+	filterDraft                 app.FeedFilter
+	filterDraftView             domain.SourceID
+	filterCursor                int
+	health                      bool
+	rulesOpen                   bool
+	ruleCursor                  int
+	ruleForm                    *huh.Form
+	ruleDraft                   ruleDraft
+	ruleEditingID               int64
+	dedupeOpen                  bool
+	dedupeCursor                int
+	recommendDiagnosticsOpen    bool
+	recommendDiagnosticsLoading bool
+	recommendDiagnostics        domain.RecommendationDiagnostics
+	recommendDiagnosticsError   string
+	message                     string
+	lastError                   string
+	toast                       string
+	toastID                     int
 }
 
 type settingsState struct {

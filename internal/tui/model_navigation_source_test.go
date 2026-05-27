@@ -377,6 +377,21 @@ func TestModelSourcesFocusUpDownSwitchesSources(t *testing.T) {
 	}
 }
 
+func TestModelSourceCountUsesSnapshotCountsDuringSwitch(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	snapshot.Counts[domain.SourceGitHub] = 42
+	service := &fakeService{snapshot: snapshot}
+	model := NewModel(service, snapshot)
+
+	model, cmd := model.switchSource(domain.SourceGitHub)
+	if cmd == nil {
+		t.Fatal("source switch should load feed")
+	}
+	if got := model.sourceCount(domain.SourceGitHub); got != 42 {
+		t.Fatalf("active GitHub count during switch = %d, want stable snapshot count 42", got)
+	}
+}
+
 func TestModelSourcesUsePersistedOrder(t *testing.T) {
 	cfg := configWithSourceOrder(t, []string{"producthunt", "github", "hackernews"})
 	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false), ModelOptions{Config: cfg})

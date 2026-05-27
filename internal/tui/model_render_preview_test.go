@@ -97,7 +97,7 @@ func TestModelRenderSourceBadgesAndCounts(t *testing.T) {
 	}
 }
 
-func TestModelRenderActiveSourceCountUsesLoadedEntries(t *testing.T) {
+func TestModelRenderActiveSourceCountUsesSnapshotTotal(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	snapshot.View = domain.SourceGitHub
 	snapshot.Filter = app.FeedFilter{SourceView: "trending:daily:spoken:zh"}
@@ -112,8 +112,8 @@ func TestModelRenderActiveSourceCountUsesLoadedEntries(t *testing.T) {
 	for _, line := range strings.Split(rendered, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) == 2 && fields[0] == "GitHub" {
-			if fields[1] != "2" {
-				t.Fatalf("active GitHub count = %s, want 2:\n%s", fields[1], rendered)
+			if fields[1] != "162" {
+				t.Fatalf("active GitHub count = %s, want snapshot count 162:\n%s", fields[1], rendered)
 			}
 			return
 		}

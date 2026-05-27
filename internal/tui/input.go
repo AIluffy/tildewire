@@ -29,6 +29,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.dedupeOpen {
 		return m.handleDedupeKey(msg)
 	}
+	if m.recommendDiagnosticsOpen {
+		return m.handleRecommendDiagnosticsKey(msg)
+	}
 	if m.health {
 		return m.handleHealthKey(msg)
 	}
@@ -49,6 +52,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.health = false
 		m.rulesOpen = false
 		m.dedupeOpen = false
+		m.recommendDiagnosticsOpen = false
 		m.paletteOpen = false
 		return m, nil
 	case key.Matches(msg, m.keys.OpenDetail):
@@ -129,6 +133,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.health = false
 		m.rulesOpen = false
 		m.dedupeOpen = false
+		m.recommendDiagnosticsOpen = false
 		m.filterOpen = false
 		m.paletteOpen = false
 		m.message = "settings"
@@ -190,6 +195,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.paletteOpen = false
 		m.rulesOpen = false
 		m.dedupeOpen = false
+		m.recommendDiagnosticsOpen = false
 		return m, nil
 	}
 	return m, nil
@@ -221,6 +227,20 @@ func (m Model) handleHealthKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return next, cmd
 	case key.Matches(msg, m.keys.Back):
 		m.health = false
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m Model) handleRecommendDiagnosticsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Quit):
+		return m, tea.Quit
+	case key.Matches(msg, m.keys.Help):
+		m.help.ShowAll = !m.help.ShowAll
+		return m, nil
+	case key.Matches(msg, m.keys.Back):
+		m.recommendDiagnosticsOpen = false
 		return m, nil
 	}
 	return m, nil

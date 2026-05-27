@@ -39,6 +39,10 @@ type dedupeService interface {
 	IgnoreDedupeCandidate(context.Context, string, domain.SourceID, app.FeedFilter) (app.Snapshot, error)
 }
 
+type recommendDiagnosticsService interface {
+	RecommendationDiagnostics(context.Context, domain.FeedEntry) (domain.RecommendationDiagnostics, error)
+}
+
 type runtimeConfigService interface {
 	SetSourceConfig([]domain.SourceID, map[domain.SourceID]string)
 }
@@ -51,5 +55,6 @@ type FeedService interface {
 	savedExporter
 	ruleService
 	dedupeService
+	recommendDiagnosticsService
 	runtimeConfigService
 }

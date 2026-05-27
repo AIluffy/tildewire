@@ -24,6 +24,7 @@ func (m *Model) openPalette() {
 	m.health = false
 	m.rulesOpen = false
 	m.dedupeOpen = false
+	m.recommendDiagnosticsOpen = false
 	m.message = "command palette"
 }
 
@@ -166,6 +167,11 @@ func (m Model) paletteCommands() []paletteCommand {
 		{label: "Dedupe candidates", keywords: "dedupe duplicate candidates simhash", run: func(m Model) (Model, tea.Cmd) {
 			m.openDedupePanel()
 			return m, nil
+		}},
+		{label: "Recommend diagnostics", keywords: "recommend diagnostics profile score reasons", run: func(m Model) (Model, tea.Cmd) {
+			entry, _ := m.selected()
+			m.openRecommendDiagnosticsPanel()
+			return m, m.recommendDiagnosticsCmd(entry)
 		}},
 		paletteSourceCommand("All view", "all view source", domain.SourceAll),
 	}

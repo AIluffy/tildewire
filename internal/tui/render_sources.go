@@ -179,16 +179,13 @@ func (m Model) sourceLine(active bool, label string, count, width int) string {
 }
 
 func (m Model) sourceCount(source domain.SourceID) int {
-	if source == m.view && source != domain.SourceAll {
+	if m.counts != nil {
+		return m.counts[source]
+	}
+	if source == m.view || (source == domain.SourceAll && m.view == domain.SourceAll) {
 		return len(m.entries)
 	}
-	if m.counts == nil {
-		if source == domain.SourceAll {
-			return len(m.entries)
-		}
-		return 0
-	}
-	return m.counts[source]
+	return 0
 }
 
 func stateFlags(state domain.ItemState) string {

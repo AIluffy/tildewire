@@ -69,6 +69,8 @@ type fakeService struct {
 	ignoredCandidateKey string
 	cacheCleared        bool
 	itemEvents          []domain.ItemEvent
+	diagnostics         domain.RecommendationDiagnostics
+	diagnosticsCalls    int
 	enabledSources      []domain.SourceID
 	tokens              map[domain.SourceID]string
 }
@@ -132,6 +134,11 @@ func (f *fakeService) SetHidden(_ context.Context, _ string, hidden bool, _ doma
 func (f *fakeService) RecordItemEvent(_ context.Context, event domain.ItemEvent) error {
 	f.itemEvents = append(f.itemEvents, event)
 	return nil
+}
+
+func (f *fakeService) RecommendationDiagnostics(context.Context, domain.FeedEntry) (domain.RecommendationDiagnostics, error) {
+	f.diagnosticsCalls++
+	return f.diagnostics, nil
 }
 
 func (f *fakeService) LoadDetail(context.Context, domain.FeedEntry) (domain.ItemDetail, error) {

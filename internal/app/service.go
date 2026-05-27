@@ -173,7 +173,6 @@ func (s *Service) LoadFeed(ctx context.Context, view domain.SourceID, filter Fee
 			return Snapshot{}, err
 		}
 		counts[view] = viewCount
-		counts[domain.SourceAll] = sumSourceCounts(counts, s.sources)
 	}
 	fetchHistory, err := s.store.RecentFetchEvents(ctx, 12)
 	if err != nil {

@@ -71,3 +71,50 @@ func TestTermsForItemExtractsStableRecommendationTerms(t *testing.T) {
 		}
 	}
 }
+
+func TestTopProfileTermsSortsByPolarityThenTerm(t *testing.T) {
+	profile := domain.RecommendationProfile{Terms: map[string]domain.RecommendationProfileTerm{
+		TermKey("tag", "go"): {
+			Kind:     "tag",
+			Value:    "go",
+			Positive: 0.8,
+			Negative: 0.1,
+		},
+		TermKey("keyword", "ai"): {
+			Kind:     "keyword",
+			Value:    "ai",
+			Positive: 0.8,
+			Negative: 0.4,
+		},
+		TermKey("source", "github"): {
+			Kind:     "source",
+			Value:    "github",
+			Positive: 1.2,
+			Negative: 0.2,
+		},
+		TermKey("tag", "rust"): {
+			Kind:     "tag",
+			Value:    "rust",
+			Positive: 0.2,
+			Negative: 0.9,
+		},
+	}}
+
+	positive := TopProfileTerms(profile, ProfilePositive, 3)
+	if got := termNames(positive); strings.Join(got, ",") != "source:github,keyword:ai,tag:go" {
+		t.Fatalf("positive terms = %v", got)
+	}
+
+	negative := TopProfileTerms(profile, ProfileNegative, 2)
+	if got := termNames(negative); strings.Join(got, ",") != "tag:rust,keyword:ai" {
+		t.Fatalf("negative terms = %v", got)
+	}
+}
+
+func termNames(terms []domain.RecommendationProfileTerm) []string {
+	names := make([]string, 0, len(terms))
+	for _, term := range terms {
+		names = append(names, term.Kind+":"+term.Value)
+	}
+	return names
+}

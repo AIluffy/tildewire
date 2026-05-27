@@ -21,6 +21,13 @@ type Signal struct {
 	OccurredAt time.Time
 }
 
+type ProfilePolarity string
+
+const (
+	ProfilePositive ProfilePolarity = "positive"
+	ProfileNegative ProfilePolarity = "negative"
+)
+
 var tokenPattern = regexp.MustCompile(`[[:alnum:]][[:alnum:]_+\-./#]*`)
 
 var stopWords = map[string]bool{
@@ -183,6 +190,43 @@ func TopReasons(reasons []domain.RecommendationReason, limit int) []domain.Recom
 		}
 	}
 	return out
+}
+
+func TopProfileTerms(profile domain.RecommendationProfile, polarity ProfilePolarity, limit int) []domain.RecommendationProfileTerm {
+	if len(profile.Terms) == 0 || limit <= 0 {
+		return nil
+	}
+	terms := make([]domain.RecommendationProfileTerm, 0, len(profile.Terms))
+	for _, term := range profile.Terms {
+		if profileTermScore(term, polarity) <= 0 {
+			continue
+		}
+		terms = append(terms, term)
+	}
+	sort.SliceStable(terms, func(i, j int) bool {
+		left := profileTermScore(terms[i], polarity)
+		right := profileTermScore(terms[j], polarity)
+		if left != right {
+			return left > right
+		}
+		if terms[i].Kind != terms[j].Kind {
+			return terms[i].Kind < terms[j].Kind
+		}
+		return terms[i].Value < terms[j].Value
+	})
+	if len(terms) > limit {
+		terms = terms[:limit]
+	}
+	return terms
+}
+
+func profileTermScore(term domain.RecommendationProfileTerm, polarity ProfilePolarity) float64 {
+	switch polarity {
+	case ProfileNegative:
+		return term.Negative
+	default:
+		return term.Positive
+	}
 }
 
 func addKeywordTerms(add func(string, string, float64), text string, weight float64, limit int) {

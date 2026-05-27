@@ -195,6 +195,31 @@ func TestModelStaleRefreshSnapshotUpdatesInactiveSourceStatus(t *testing.T) {
 	}
 }
 
+func TestModelBackgroundCountsDoNotAddRecommendToAll(t *testing.T) {
+	initial := tuiSnapshot(false)
+	initial.View = domain.SourceHackerNews
+	initial.Counts = map[domain.SourceID]int{
+		domain.SourceAll:        12,
+		domain.SourceRecommend:  3,
+		domain.SourceGitHub:     10,
+		domain.SourceHackerNews: 2,
+	}
+	model := NewModel(&fakeService{snapshot: initial}, initial)
+
+	background := initial
+	background.Counts = map[domain.SourceID]int{
+		domain.SourceAll:        99,
+		domain.SourceRecommend:  5,
+		domain.SourceGitHub:     11,
+		domain.SourceHackerNews: 4,
+	}
+
+	model.applyBackgroundSnapshot(background)
+	if model.counts[domain.SourceAll] != 13 {
+		t.Fatalf("merged All count = %d, want real-source total 13 without Recommend: %+v", model.counts[domain.SourceAll], model.counts)
+	}
+}
+
 func TestModelInitRefreshDoesNotForce(t *testing.T) {
 	service := &fakeService{snapshot: tuiSnapshot(false)}
 	model := NewModel(service, tuiSnapshot(false))

@@ -213,7 +213,7 @@ Theme commands are also available from the command palette as `Theme: ...` entri
 
 ## Personalization and Dedupe
 
-tildewire combines explicit rules and implicit behavior signals in the All and Recommend views.
+tildewire combines explicit rules and local behavior signals in the All and Recommend views.
 
 Explicit rules:
 
@@ -222,14 +222,16 @@ Explicit rules:
 - Hide matching items.
 - Match targets include keyword, language, tag, domain, source, repo, and author.
 
-Implicit signals:
+Implicit All-view signals:
 
 - Saved tags, languages, repos, authors, and sources slightly increase related All-view ranking.
 - Hidden tags, languages, repos, authors, and sources slightly reduce related All-view ranking.
 
-Recommend is trained by saving items or creating boost rules from the command palette. It shows only the top 10 recommendations from the latest cached feed window, gives saved sources extra weight in Recommend, stays empty until it has a positive interest signal, and always excludes durable hidden items and hide-rule matches, even when Show hidden items is enabled.
+Recommend is trained by explicit local interactions: save/unsave, hide/restore, read/unread, opening detail, opening item or source URLs, and copying URLs or Markdown links. It uses time-decayed item terms from titles, summaries, tags, languages, repos, authors, organizations, and source context. Recommend shows only the top 10 recommendations from the latest cached feed window, stays empty until it has a positive interest signal, and always excludes durable hidden items and hide-rule matches, even when Show hidden items is enabled.
 
 Open the Personalization Rules panel from the command palette to review rules. Use `Space` to toggle a rule and `d` to delete it.
+
+Open `Recommend diagnostics` from the command palette to inspect the read-only recommendation profile, selected-item score breakdown, matched terms, reasons, and exclusion status. This panel is local-only and does not change recommendation scores or training history.
 
 Fuzzy dedupe candidates are generated from item similarity and shown in the Dedupe Candidates panel. These are suggestions, not silent destructive merges. Use `i` to ignore a candidate you do not want to see again.
 

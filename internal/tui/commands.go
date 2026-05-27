@@ -151,6 +151,15 @@ func (m Model) loadDetailCmd(entry domain.FeedEntry) tea.Cmd {
 	}
 }
 
+func (m Model) recommendDiagnosticsCmd(entry domain.FeedEntry) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		diagnostics, err := m.service.RecommendationDiagnostics(ctx, entry)
+		return recommendDiagnosticsMsg{diagnostics: diagnostics, err: err}
+	}
+}
+
 func (m Model) markdownImagePreviewCmd(itemID string, key markdownImagePreviewKey, request markdownImagePreviewRequest) tea.Cmd {
 	previewer := m.imagePreviewer
 	return func() tea.Msg {
@@ -315,6 +324,11 @@ type markdownImagePreviewMsg struct {
 	key    markdownImagePreviewKey
 	result markdownImagePreviewResult
 	err    error
+}
+
+type recommendDiagnosticsMsg struct {
+	diagnostics domain.RecommendationDiagnostics
+	err         error
 }
 
 type statusMsg struct {
