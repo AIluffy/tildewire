@@ -66,7 +66,7 @@ func RenderDocument(markdown string, options Options) (RenderedDocument, error) 
 	if err != nil {
 		return RenderedDocument{}, err
 	}
-	segments := splitMarkdownSegments(markdown, options.BaseURL, options.ImageSegments)
+	segments := splitMarkdownSegments(markdown, options.BaseURL)
 	if markdownSegmentsContainSpecial(segments) {
 		return renderMarkdownSegments(renderer, segments, width, options)
 	}

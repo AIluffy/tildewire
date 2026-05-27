@@ -1,6 +1,10 @@
 package markdown
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/AIluffy/tildewire/internal/config"
+)
 
 type markdownSegment struct {
 	markdown string
@@ -40,7 +44,13 @@ func renderMarkdownSegments(renderer markdownRenderer, segments []markdownSegmen
 		}
 		if segment.image != nil {
 			state, ok := imageStateForSegment(*segment.image, width, options)
-			appendBlock(RenderImageSegment(*segment.image, width, options.ImageMode, state, ok, options.Theme))
+			mode := options.ImageMode
+			if !options.ImageSegments {
+				mode = config.MarkdownImagePreviewOff
+				state = ImageState{}
+				ok = false
+			}
+			appendBlock(RenderImageSegment(*segment.image, width, mode, state, ok, options.Theme))
 			continue
 		}
 		if segment.divider != nil {
@@ -59,7 +69,7 @@ func renderMarkdownSegments(renderer markdownRenderer, segments []markdownSegmen
 	return RenderedDocument{Content: rendered.String(), CodeBlocks: codeBlocks}, nil
 }
 
-func splitMarkdownSegments(markdown string, baseURL string, imageSegments bool) []markdownSegment {
+func splitMarkdownSegments(markdown string, baseURL string) []markdownSegment {
 	lines := strings.Split(markdown, "\n")
 	segments := make([]markdownSegment, 0, 1)
 	markdownLines := make([]string, 0, len(lines))
@@ -85,16 +95,17 @@ func splitMarkdownSegments(markdown string, baseURL string, imageSegments bool) 
 			i++
 			continue
 		}
-		if imageSegments {
-			if images := ParseImageLine(lines[i], baseURL); len(images) > 0 {
-				flushMarkdown()
-				for _, image := range images {
-					image := image
-					segments = append(segments, markdownSegment{image: &image})
-				}
-				i++
-				continue
-			}
+		if images, next, ok := parseImageOnlyHTMLBlockAt(lines, i, baseURL); ok {
+			flushMarkdown()
+			appendImageSegments(&segments, images)
+			i = next
+			continue
+		}
+		if images := ParseImageLine(lines[i], baseURL); len(images) > 0 {
+			flushMarkdown()
+			appendImageSegments(&segments, images)
+			i++
+			continue
 		}
 		if block, next, ok := parseMarkdownTableAt(lines, i); ok {
 			flushMarkdown()
@@ -107,6 +118,52 @@ func splitMarkdownSegments(markdown string, baseURL string, imageSegments bool) 
 	}
 	flushMarkdown()
 	return segments
+}
+
+func appendImageSegments(segments *[]markdownSegment, images []ImageRef) {
+	for _, image := range images {
+		image := image
+		*segments = append(*segments, markdownSegment{image: &image})
+	}
+}
+
+func parseImageOnlyHTMLBlockAt(lines []string, start int, baseURL string) ([]ImageRef, int, bool) {
+	if start >= len(lines) || strings.TrimSpace(lines[start]) == "" {
+		return nil, start, false
+	}
+	blockLines := make([]string, 0)
+	for i := start; i < len(lines); i++ {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed == "" || !htmlImageBlockLine(trimmed) {
+			break
+		}
+		blockLines = append(blockLines, trimmed)
+	}
+	if len(blockLines) == 0 {
+		return nil, start, false
+	}
+	next := start + len(blockLines)
+	if next < len(lines) && strings.TrimSpace(lines[next]) != "" {
+		return nil, start, false
+	}
+	block := strings.Join(blockLines, " ")
+	if !imageOnlyHTMLLine(block) {
+		return nil, start, false
+	}
+	images := ParseImageLine(block, baseURL)
+	if len(images) == 0 {
+		return nil, start, false
+	}
+	return images, next, true
+}
+
+func htmlImageBlockLine(line string) bool {
+	if !strings.Contains(line, "<") {
+		return false
+	}
+	withoutImages := htmlImgTagPattern.ReplaceAllString(line, "")
+	withoutTags := htmlTagPattern.ReplaceAllString(withoutImages, "")
+	return strings.TrimSpace(withoutTags) == ""
 }
 
 func markdownSegmentsContainSpecial(segments []markdownSegment) bool {

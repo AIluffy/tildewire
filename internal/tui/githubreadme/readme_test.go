@@ -28,6 +28,40 @@ func TestCleanRemovesBadgesAndKeepsReadmeContent(t *testing.T) {
 	}
 }
 
+func TestCleanNormalizesMultilineHTMLHeader(t *testing.T) {
+	cleaned := Clean(strings.Join([]string{
+		`<p align="center">`,
+		`  <em>The Anti-Slop Frontend Framework for AI Agents</em>`,
+		`</p>`,
+		``,
+		`<p align="center">`,
+		`  <a href="https://tasteskill.dev" title="Taste Skill - tasteskill.dev">`,
+		`    <img src="assets/taste-skill-logo.webp" width="80" height="80" alt="Taste Skill" />`,
+		`  </a>`,
+		`</p>`,
+		``,
+		`<p align="center">`,
+		`  <a href="https://tasteskill.dev">`,
+		`    <img src="https://img.shields.io/badge/OPEN-tasteskill.dev-%23a855f7?style=for-the-badge&labelColor=%230f172a" alt="Open tasteskill.dev" />`,
+		`  </a>`,
+		`</p>`,
+	}, "\n"))
+
+	for _, want := range []string{
+		"The Anti-Slop Frontend Framework for AI Agents",
+		"![Taste Skill](assets/taste-skill-logo.webp)",
+	} {
+		if !strings.Contains(cleaned, want) {
+			t.Fatalf("cleaned README missing %q:\n%s", want, cleaned)
+		}
+	}
+	for _, unwanted := range []string{"<p", "<a", "<em>", "<img", "img.shields.io", "Open tasteskill.dev"} {
+		if strings.Contains(cleaned, unwanted) {
+			t.Fatalf("cleaned README leaked %q:\n%s", unwanted, cleaned)
+		}
+	}
+}
+
 func TestImageRefsResolveRelativeRawAsset(t *testing.T) {
 	refs := ImageRefs("![screen](assets/v2-screen.png)", "https://github.com/ruvnet/RuView/blob/main/README.md")
 	if len(refs) != 1 {

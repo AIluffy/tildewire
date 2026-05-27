@@ -17,6 +17,7 @@ var (
 	htmlAttrPattern               = regexp.MustCompile(`(?i)\b([a-z0-9_-]+)\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))`)
 	htmlPictureSourcePattern      = regexp.MustCompile(`(?i)<\s*/?\s*(picture|source)\b[^>]*>`)
 	htmlImageWrapperOnlyPattern   = regexp.MustCompile(`(?i)^\s*</?\s*(a|p|div|center)\b[^>]*>\s*$`)
+	htmlBreakTagPattern           = regexp.MustCompile(`(?i)<\s*br\s*/?\s*>`)
 	htmlTagPattern                = regexp.MustCompile(`(?i)<\s*/?\s*[a-z][a-z0-9:-]*\b[^>]*>`)
 )
 

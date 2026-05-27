@@ -268,6 +268,62 @@ func TestRenderImageSegmentUsesPreviewStateBySource(t *testing.T) {
 	}
 }
 
+func TestRenderImageOnlyHTMLWrappersWithoutImageSegments(t *testing.T) {
+	markdown := strings.Join([]string{
+		`<p align="center"><a href="https://tasteskill.dev" title="Taste Skill - tasteskill.dev"><img src="assets/taste-skill-logo.webp" width="80" height="80" alt="Taste Skill" /></a></p>`,
+		"",
+		`<p align="center"><a href="https://tasteskill.dev"><img src="https://img.shields.io/badge/OPEN-tasteskill.dev-%23a855f7?style=for-the-badge&labelColor=%230f172a" alt="Open tasteskill.dev" /></a></p>`,
+	}, "\n")
+
+	rendered, err := Render(markdown, Options{
+		Style:   "dark",
+		Width:   96,
+		BaseURL: "https://raw.githubusercontent.com/Leonxlnx/taste-skill/refs/heads/main/README.md",
+	})
+	if err != nil {
+		t.Fatalf("render markdown: %v", err)
+	}
+	visible := ansi.Strip(rendered)
+	for _, want := range []string{"Image: Taste Skill", "Image: Open tasteskill.dev"} {
+		if !strings.Contains(visible, want) {
+			t.Fatalf("rendered image-only HTML wrapper missing %q:\n%s", want, visible)
+		}
+	}
+	for _, forbidden := range []string{"+---", "|T a s t e", "<img", "<a href"} {
+		if strings.Contains(visible, forbidden) {
+			t.Fatalf("rendered image-only HTML wrapper leaked %q:\n%s", forbidden, visible)
+		}
+	}
+}
+
+func TestRenderMultilineImageOnlyHTMLWrapperWithoutImageSegments(t *testing.T) {
+	markdown := strings.Join([]string{
+		`<p align="center">`,
+		`  <a href="https://tasteskill.dev" title="Taste Skill - tasteskill.dev">`,
+		`    <img src="assets/taste-skill-logo.webp" width="80" height="80" alt="Taste Skill" />`,
+		`  </a>`,
+		`</p>`,
+	}, "\n")
+
+	rendered, err := Render(markdown, Options{
+		Style:   "dark",
+		Width:   96,
+		BaseURL: "https://raw.githubusercontent.com/Leonxlnx/taste-skill/refs/heads/main/README.md",
+	})
+	if err != nil {
+		t.Fatalf("render markdown: %v", err)
+	}
+	visible := ansi.Strip(rendered)
+	if !strings.Contains(visible, "Image: Taste Skill") {
+		t.Fatalf("rendered multiline image-only HTML wrapper missing placeholder:\n%s", visible)
+	}
+	for _, forbidden := range []string{"<p", "<a href", "</a>", "</p>", "+---", "|T a s t e"} {
+		if strings.Contains(visible, forbidden) {
+			t.Fatalf("rendered multiline image-only HTML wrapper leaked %q:\n%s", forbidden, visible)
+		}
+	}
+}
+
 func TestRawLineInfoRoundTrips(t *testing.T) {
 	raw := "\x1b_Ga=T;RAW\x1b\\"
 	line := MakeRawLine(raw, 20)

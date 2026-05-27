@@ -68,12 +68,17 @@ func noiseLine(trimmed string) bool {
 
 func cleanLine(line string) string {
 	line = stripBadgeImagesFromLine(line)
-	if imageOnlyMarkdownLine(strings.TrimSpace(line)) || imageOnlyHTMLLine(strings.TrimSpace(line)) {
+	trimmed := strings.TrimSpace(line)
+	if imageOnlyHTMLLine(trimmed) {
+		return renderHTMLImageMarkdown(trimmed)
+	}
+	if imageOnlyMarkdownLine(trimmed) {
 		return strings.TrimRight(line, " \t")
 	}
 	line = renderImagePlaceholders(line)
 	line = markdownLinkPattern.ReplaceAllString(line, "$1")
 	line = rawURLPattern.ReplaceAllStringFunc(line, shortenURL)
+	line = stripInlineHTML(line)
 	return strings.TrimRight(line, " \t")
 }
 
@@ -117,6 +122,34 @@ func renderImagePlaceholders(value string) string {
 		}
 		return fmt.Sprintf("Image: %s (%s)", alt, src)
 	})
+}
+
+func renderHTMLImageMarkdown(line string) string {
+	refs := parseHTMLImageRefs(line)
+	rendered := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		if isBadgeImageURL(ref.Src) {
+			continue
+		}
+		rendered = append(rendered, fmt.Sprintf("![%s](%s)", markdownImageAlt(ref.Alt), ref.Src))
+	}
+	return strings.Join(rendered, "\n")
+}
+
+func markdownImageAlt(alt string) string {
+	alt = strings.TrimSpace(alt)
+	if alt == "" {
+		alt = "image"
+	}
+	alt = strings.ReplaceAll(alt, `\`, `\\`)
+	alt = strings.ReplaceAll(alt, "]", `\]`)
+	return alt
+}
+
+func stripInlineHTML(line string) string {
+	line = htmlBreakTagPattern.ReplaceAllString(line, " ")
+	line = htmlTagPattern.ReplaceAllString(line, "")
+	return strings.TrimSpace(line)
 }
 
 func expandInlineBlockquoteTableLine(line string) []string {

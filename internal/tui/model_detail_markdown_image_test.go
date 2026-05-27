@@ -1053,6 +1053,78 @@ func TestModelGitHubDetailRendersWrappedReadmeImageWithoutChrome(t *testing.T) {
 	}
 }
 
+func TestModelGitHubDetailRendersMultilineHTMLReadmeHeader(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	snapshot.Entries[0].Item = domain.FeedItem{
+		ID:    "gh-html-readme-header",
+		Title: "owner/taste-skill",
+		URL:   "https://github.com/owner/taste-skill",
+		Refs:  domain.Refs{Repo: "owner/taste-skill"},
+	}
+	snapshot.Entries[0].Sources = []domain.ItemSource{{Source: domain.SourceGitHub}}
+	service := &fakeService{
+		snapshot: snapshot,
+		detail: domain.ItemDetail{
+			ItemID: "gh-html-readme-header",
+			Sections: []domain.DetailSection{{
+				Title:  "GitHub README",
+				Source: domain.SourceGitHub,
+				URL:    "https://github.com/owner/taste-skill/blob/main/README.md",
+				Body: strings.Join([]string{
+					`<p align="center">`,
+					`  <em>The Anti-Slop Frontend Framework for AI Agents</em>`,
+					`</p>`,
+					``,
+					`<p align="center">`,
+					`  <a href="https://tasteskill.dev" title="Taste Skill - tasteskill.dev">`,
+					`    <img src="assets/taste-skill-logo.webp" width="80" height="80" alt="Taste Skill" />`,
+					`  </a>`,
+					`</p>`,
+					``,
+					`<p align="center">`,
+					`  <a href="https://tasteskill.dev">`,
+					`    <img src="https://img.shields.io/badge/OPEN-tasteskill.dev-%23a855f7?style=for-the-badge&labelColor=%230f172a" alt="Open tasteskill.dev" />`,
+					`  </a>`,
+					`</p>`,
+				}, "\n"),
+			}},
+		},
+	}
+	previewer := &fakeMarkdownImagePreviewer{
+		result: markdownImagePreviewResult{Content: "rendered taste skill logo", Backend: "halfblocks"},
+	}
+	model := NewModel(service, snapshot, ModelOptions{
+		Config:         config.Config{GlamourStyle: "dark", CacheDir: t.TempDir(), MarkdownImagePreview: "auto"},
+		ImagePreviewer: previewer,
+	})
+	model.width = 100
+	model.height = 24
+
+	model, cmd := updateModelWithKey(t, model, "enter")
+	if cmd == nil {
+		t.Fatal("expected detail load command")
+	}
+	model = runOptionalCmd(t, model, cmd)
+
+	if len(previewer.requests) != 1 {
+		t.Fatalf("preview requests = %+v, want one non-badge logo", previewer.requests)
+	}
+	if got := previewer.requests[0].URL; got != "https://raw.githubusercontent.com/owner/taste-skill/main/assets/taste-skill-logo.webp" {
+		t.Fatalf("preview URL = %q", got)
+	}
+	visible := ansi.Strip(model.render())
+	for _, want := range []string{"The Anti-Slop Frontend Framework for AI Agents", "rendered taste skill logo"} {
+		if !strings.Contains(visible, want) {
+			t.Fatalf("rendered README missing %q:\n%s", want, visible)
+		}
+	}
+	for _, unwanted := range []string{"<p align=", "<a href=", "<em>", "<img", "img.shields.io", "Open tasteskill.dev"} {
+		if strings.Contains(visible, unwanted) {
+			t.Fatalf("HTML README chrome leaked %q:\n%s", unwanted, visible)
+		}
+	}
+}
+
 func TestModelGitHubDetailDrawsRawImagePreviewViaRawCommand(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	snapshot.Entries[0].Item = domain.FeedItem{
