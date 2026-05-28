@@ -55,16 +55,18 @@ type Previewer interface {
 
 // TerminalImagePreviewer renders Markdown images using terminal graphics or halfblocks.
 type TerminalImagePreviewer struct {
-	mu       sync.Mutex
-	cacheDir string
-	managers map[string]*tuiimage.ImageManager
+	mu        sync.Mutex
+	cacheDir  string
+	userAgent string
+	managers  map[string]*tuiimage.ImageManager
 }
 
 // NewTerminalImagePreviewer creates a terminal image previewer backed by cacheDir.
-func NewTerminalImagePreviewer(cacheDir string) *TerminalImagePreviewer {
+func NewTerminalImagePreviewer(cacheDir string, userAgents ...string) *TerminalImagePreviewer {
 	return &TerminalImagePreviewer{
-		cacheDir: cacheDir,
-		managers: make(map[string]*tuiimage.ImageManager),
+		cacheDir:  cacheDir,
+		userAgent: markdownImageUserAgent(userAgents...),
+		managers:  make(map[string]*tuiimage.ImageManager),
 	}
 }
 
@@ -77,7 +79,7 @@ func (p *TerminalImagePreviewer) RenderMarkdownImage(ctx context.Context, reques
 	if strings.TrimSpace(request.CacheDir) == "" {
 		request.CacheDir = p.cacheDir
 	}
-	imagePath, err := cacheMarkdownImage(ctx, request.URL, request.CacheDir)
+	imagePath, err := cacheMarkdownImage(ctx, request.URL, request.CacheDir, p.userAgent)
 	if err != nil {
 		return ImageResult{}, err
 	}
@@ -180,7 +182,7 @@ func ScrollableImagePreviewMode(mode string) string {
 	return mode
 }
 
-func cacheMarkdownImage(ctx context.Context, rawURL, cacheDir string) (string, error) {
+func cacheMarkdownImage(ctx context.Context, rawURL, cacheDir, userAgent string) (string, error) {
 	parsed, err := url.Parse(rawURL)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		return "", fmt.Errorf("invalid image URL %q", rawURL)
@@ -207,7 +209,7 @@ func cacheMarkdownImage(ctx context.Context, rawURL, cacheDir string) (string, e
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", "tildewire/0.1")
+	req.Header.Set("User-Agent", markdownImageUserAgent(userAgent))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
@@ -243,6 +245,15 @@ func markdownImageCacheDir(cacheDir string) (string, error) {
 		return "", err
 	}
 	return filepath.Join(userCache, "tildewire", "images"), nil
+}
+
+func markdownImageUserAgent(userAgents ...string) string {
+	if len(userAgents) > 0 {
+		if userAgent := strings.TrimSpace(userAgents[0]); userAgent != "" {
+			return userAgent
+		}
+	}
+	return config.UserAgent("")
 }
 
 func imageCacheExtension(rawPath string) string {

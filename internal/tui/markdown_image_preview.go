@@ -42,8 +42,8 @@ type detailRawImageRedrawMsg struct {
 	imageVersion int
 }
 
-func newTerminalMarkdownImagePreviewer(cacheDir string) markdownImagePreviewer {
-	return md.NewTerminalImagePreviewer(cacheDir)
+func newTerminalMarkdownImagePreviewer(cacheDir string, userAgents ...string) markdownImagePreviewer {
+	return md.NewTerminalImagePreviewer(cacheDir, userAgents...)
 }
 
 func (m *Model) queueDetailImagePreviewCmds() tea.Cmd {
@@ -78,7 +78,7 @@ func (m *Model) queueDetailImagePreviewCmds() tea.Cmd {
 			Loading: true,
 		}
 		m.detailImageVersion++
-		cmds = append(cmds, m.markdownImagePreviewCmd(m.detailEntryID, key, markdownImagePreviewRequest{
+		cmds = append(cmds, m.markdownImagePreviewCmd(m.detailRequestID, m.detailEntryID, key, markdownImagePreviewRequest{
 			URL:       ref.URL,
 			Alt:       ref.Alt,
 			Mode:      mode,

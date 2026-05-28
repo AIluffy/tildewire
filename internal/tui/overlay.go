@@ -68,6 +68,9 @@ func (m *Model) closeOverlayStateFor(next overlayMode) {
 		m.ruleForm = nil
 		m.ruleEditingID = 0
 	}
+	if next != overlayDetail {
+		m.clearDetailState()
+	}
 }
 
 func (m Model) handleOverlayKey(mode overlayMode, msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {

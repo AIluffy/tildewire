@@ -13,6 +13,18 @@ import (
 	"github.com/AIluffy/tildewire/internal/httpx"
 )
 
+func loadRecommendFeed(t *testing.T, service *Service, ctx context.Context, filter FeedFilter) Snapshot {
+	t.Helper()
+	if err := service.RefreshRecommendations(ctx); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, filter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return snapshot
+}
+
 func TestLoadFeedAppliesPersonalizationRulesAndKeepsSourceRank(t *testing.T) {
 	ctx := context.Background()
 	db := openAppTestStore(t)
@@ -129,10 +141,7 @@ func TestRecommendFeedUsesBoostRulesAndSavedProfile(t *testing.T) {
 	}
 	service := NewService(db, httpx.New(time.Second), nil)
 
-	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	snapshot := loadRecommendFeed(t, service, ctx, FeedFilter{})
 	ids := appEntryIDs(snapshot.Entries)
 	if !slices.Contains(ids, boosted.ID) || !slices.Contains(ids, aiCandidate.ID) || slices.Contains(ids, general.ID) {
 		t.Fatalf("recommend ids = %+v, want boosted and saved-profile candidate without general item", ids)
@@ -167,10 +176,7 @@ func TestRecommendFeedUsesInteractionProfileAndReasons(t *testing.T) {
 	}
 	service := NewService(db, httpx.New(time.Second), nil)
 
-	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	snapshot := loadRecommendFeed(t, service, ctx, FeedFilter{})
 	ids := appEntryIDs(snapshot.Entries)
 	if !slices.Contains(ids, candidate.ID) || slices.Contains(ids, general.ID) {
 		t.Fatalf("recommend ids = %+v, want interaction-trained candidate without general item", ids)
@@ -209,10 +215,7 @@ func TestRecommendFeedDecaysOlderInteractionSignals(t *testing.T) {
 	}
 	service := NewService(db, httpx.New(time.Second), nil)
 
-	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	snapshot := loadRecommendFeed(t, service, ctx, FeedFilter{})
 	rustIndex := appEntryIndex(snapshot.Entries, rustCandidate.ID)
 	aiIndex := appEntryIndex(snapshot.Entries, aiCandidate.ID)
 	if rustIndex < 0 || aiIndex < 0 || rustIndex > aiIndex {
@@ -251,10 +254,7 @@ func TestRecommendFeedLimitsToTopTen(t *testing.T) {
 	}
 	service := NewService(db, httpx.New(time.Second), nil)
 
-	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	snapshot := loadRecommendFeed(t, service, ctx, FeedFilter{})
 	if len(snapshot.Entries) != 10 {
 		t.Fatalf("recommend entries = %d, want top 10", len(snapshot.Entries))
 	}
@@ -308,10 +308,7 @@ func TestRecommendFeedSurfacesSavedSourceInTopTen(t *testing.T) {
 	}
 	service := NewService(db, httpx.New(time.Second), nil)
 
-	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	snapshot := loadRecommendFeed(t, service, ctx, FeedFilter{})
 	if !snapshotHasSource(snapshot, domain.SourceGitHub) {
 		t.Fatalf("recommend ids = %+v, want saved GitHub source represented in top 10", appEntryIDs(snapshot.Entries))
 	}
@@ -348,10 +345,7 @@ func TestRecommendFeedSamplesAcrossSourcesWhenLatestWindowIsDominated(t *testing
 	}
 	service := NewService(db, httpx.New(time.Second), nil)
 
-	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	snapshot := loadRecommendFeed(t, service, ctx, FeedFilter{})
 	if !snapshotHasSource(snapshot, domain.SourceGitHub) {
 		t.Fatalf("recommend ids = %+v, want non-Product-Hunt candidate represented when Product Hunt fills latest window", appEntryIDs(snapshot.Entries))
 	}
@@ -389,10 +383,7 @@ func TestRecommendFeedUsesLatestCachedFeedOnly(t *testing.T) {
 	}
 	service := NewService(db, httpx.New(time.Second), nil)
 
-	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	snapshot := loadRecommendFeed(t, service, ctx, FeedFilter{})
 	if slices.Contains(appEntryIDs(snapshot.Entries), oldBoosted.ID) {
 		t.Fatalf("recommend ids = %+v, old item outside latest feed should not be recommended", appEntryIDs(snapshot.Entries))
 	}
@@ -442,10 +433,7 @@ func TestRecommendFeedExcludesMutedHiddenAndDisabledSources(t *testing.T) {
 	service := NewService(db, httpx.New(time.Second), nil)
 	service.SetSourceConfig([]domain.SourceID{domain.SourceHackerNews}, nil)
 
-	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{IncludeHidden: true})
-	if err != nil {
-		t.Fatal(err)
-	}
+	snapshot := loadRecommendFeed(t, service, ctx, FeedFilter{IncludeHidden: true})
 	ids := appEntryIDs(snapshot.Entries)
 	if !reflect.DeepEqual(ids, []string{kept.ID}) {
 		t.Fatalf("recommend ids = %+v, want only kept HN item", ids)
@@ -463,14 +451,11 @@ func TestRecommendFeedRecomputesAfterRuleAndStateChanges(t *testing.T) {
 	}
 	service := NewService(db, httpx.New(time.Second), nil)
 
-	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	snapshot := loadRecommendFeed(t, service, ctx, FeedFilter{})
 	if len(snapshot.Entries) != 0 {
 		t.Fatalf("cold recommend entries = %+v, want empty", snapshot.Entries)
 	}
-	snapshot, err = service.CreatePersonalizationRule(ctx, domain.PersonalizationRule{
+	snapshot, err := service.CreatePersonalizationRule(ctx, domain.PersonalizationRule{
 		Effect:  domain.RuleEffectBoost,
 		Target:  domain.RuleTargetKeyword,
 		Value:   "sqlite",
@@ -485,10 +470,7 @@ func TestRecommendFeedRecomputesAfterRuleAndStateChanges(t *testing.T) {
 	if err := service.SetHidden(ctx, item.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err = service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{IncludeHidden: true})
-	if err != nil {
-		t.Fatal(err)
-	}
+	snapshot = loadRecommendFeed(t, service, ctx, FeedFilter{IncludeHidden: true})
 	if len(snapshot.Entries) != 0 {
 		t.Fatalf("recommend after hide = %+v, want empty despite IncludeHidden", snapshot.Entries)
 	}
@@ -706,7 +688,7 @@ func TestRecommendationDiagnosticsDoesNotReplaceRecommendationScores(t *testing.
 	}
 }
 
-func TestRecommendFeedRecomputesStaleScoresWhenOpened(t *testing.T) {
+func TestRecommendFeedRecomputesWhenMarkedDirty(t *testing.T) {
 	ctx := context.Background()
 	db := openAppTestStore(t)
 	defer db.Close()
@@ -722,9 +704,7 @@ func TestRecommendFeedRecomputesStaleScoresWhenOpened(t *testing.T) {
 		t.Fatal(err)
 	}
 	service := NewService(db, httpx.New(time.Second), nil)
-	if _, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{}); err != nil {
-		t.Fatal(err)
-	}
+	loadRecommendFeed(t, service, ctx, FeedFilter{})
 
 	if err := db.UpsertFeedItems(ctx, []domain.FeedItem{githubOne, githubTwo}); err != nil {
 		t.Fatal(err)
@@ -735,11 +715,9 @@ func TestRecommendFeedRecomputesStaleScoresWhenOpened(t *testing.T) {
 	if err := db.SetSaved(ctx, githubTwo.ID, true); err != nil {
 		t.Fatal(err)
 	}
+	service.markRecommendationsDirty()
 
-	snapshot, err := service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	snapshot := loadRecommendFeed(t, service, ctx, FeedFilter{})
 	if !snapshotHasSource(snapshot, domain.SourceGitHub) {
 		t.Fatalf("stale recommend scores did not refresh saved GitHub interest: ids=%+v", appEntryIDs(snapshot.Entries))
 	}

@@ -47,6 +47,29 @@ func TestDoGETWritesCacheOnSuccess(t *testing.T) {
 	}
 }
 
+func TestDoGETSendsConfiguredUserAgent(t *testing.T) {
+	var got string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.UserAgent()
+		_, _ = w.Write([]byte("live"))
+	}))
+	defer server.Close()
+
+	client := New(time.Second)
+	client.client.RetryMax = 0
+	client.SetUserAgent("tildewire/0.4.0")
+	if _, err := client.DoGET(context.Background(), GetOptions{
+		Source: "test",
+		URL:    server.URL,
+		TTL:    time.Minute,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got != "tildewire/0.4.0" {
+		t.Fatalf("user agent = %q, want tildewire/0.4.0", got)
+	}
+}
+
 func TestDoGETUsesConfiguredCacheTTL(t *testing.T) {
 	cache := newMemoryCache()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

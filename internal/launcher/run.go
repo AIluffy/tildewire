@@ -69,6 +69,7 @@ func Run(programName, version string, args []string, output io.Writer) error {
 	}
 
 	httpClient := httpx.New(time.Duration(cfg.HTTPTimeout)*time.Second, db)
+	httpClient.SetUserAgent(config.UserAgent(cfg.Version))
 	httpClient.SetCacheTTL(cfg.HTTPCacheTTL())
 	service := app.NewService(
 		db,
@@ -83,6 +84,9 @@ func Run(programName, version string, args []string, output io.Writer) error {
 		},
 	)
 	service.SetSourceConfig(configuredEnabledSources(cfg.EnabledSources), sourceTokens(cfg))
+	if err := service.RefreshRecommendations(ctx); err != nil {
+		return err
+	}
 	initial, err := service.LoadFeed(ctx, app.DefaultStartupView, app.FeedFilter{})
 	if err != nil {
 		return err

@@ -28,11 +28,13 @@ type Client struct {
 	limiters  map[string]*rate.Limiter
 	cache     httpcache.Store
 	cacheTTL  atomic.Int64
+	userAgent atomic.Value
 }
 
 const (
 	defaultMaxBodyBytes    int64 = 8 << 20
 	defaultCacheTTL              = 6 * time.Hour
+	defaultUserAgent             = "tildewire/dev"
 	hackerNewsRequestEvery       = 50 * time.Millisecond
 	hackerNewsRequestBurst       = 32
 	gitHubAPIRequestEvery        = 5 * time.Second
@@ -127,7 +129,17 @@ func New(timeout time.Duration, caches ...httpcache.Store) *Client {
 	if len(caches) > 0 {
 		client.cache = caches[0]
 	}
+	client.SetUserAgent(defaultUserAgent)
 	return client
+}
+
+// SetUserAgent sets the outbound HTTP user agent for subsequent requests.
+func (c *Client) SetUserAgent(userAgent string) {
+	userAgent = strings.TrimSpace(userAgent)
+	if userAgent == "" {
+		userAgent = defaultUserAgent
+	}
+	c.userAgent.Store(userAgent)
 }
 
 // SetCacheTTL sets the raw HTTP cache lifetime used for new and refreshed cache entries.
@@ -233,6 +245,14 @@ func (c *Client) doRequest(ctx context.Context, options requestOptions) (Respons
 	return c.executeRequest(ctx, options, state)
 }
 
+func (c *Client) userAgentHeader() string {
+	userAgent, ok := c.userAgent.Load().(string)
+	if !ok || userAgent == "" {
+		return defaultUserAgent
+	}
+	return userAgent
+}
+
 func (c *Client) prepareRequest(ctx context.Context, options requestOptions) (requestState, error) {
 	if strings.TrimSpace(options.URL) == "" {
 		return requestState{}, fmt.Errorf("url is required")
@@ -288,7 +308,7 @@ func (c *Client) executeRequest(ctx context.Context, options requestOptions, sta
 	if err != nil {
 		return Response{}, err
 	}
-	applyRequestHeaders(req, options, state.cached, state.hasCache)
+	applyRequestHeaders(req, options, state.cached, state.hasCache, c.userAgentHeader())
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -386,8 +406,8 @@ func newRequest(ctx context.Context, options requestOptions) (*retryablehttp.Req
 	return retryablehttp.NewRequestWithContext(ctx, options.Method, options.URL, body)
 }
 
-func applyRequestHeaders(req *retryablehttp.Request, options requestOptions, cached httpcache.Entry, hasCache bool) {
-	req.Header.Set("User-Agent", "tildewire/0.1")
+func applyRequestHeaders(req *retryablehttp.Request, options requestOptions, cached httpcache.Entry, hasCache bool, userAgent string) {
+	req.Header.Set("User-Agent", userAgent)
 	if options.JSON {
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("Content-Type", "application/json")

@@ -127,6 +127,52 @@ func (s *blockingRecommendationStore) ReplaceRecommendationScores(ctx context.Co
 	return s.RecommendationStore.ReplaceRecommendationScores(ctx, scores)
 }
 
+type countingRecommendationStore struct {
+	RecommendationStore
+	replaceCalls int
+}
+
+func (s *countingRecommendationStore) ReplaceRecommendationScores(ctx context.Context, scores []domain.RecommendationScore) error {
+	s.replaceCalls++
+	return s.RecommendationStore.ReplaceRecommendationScores(ctx, scores)
+}
+
+func TestNewServicePanicsWhenStoreIsNil(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("NewService did not panic for nil store")
+		}
+	}()
+
+	_ = NewService(nil, nil, nil)
+}
+
+func TestLoadFeedDoesNotRefreshRecommendationScores(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+
+	item := appTestSourceItem("hn-seed", "hackernews:seed", "Saved seed", domain.SourceHackerNews, 1, time.Now().UTC())
+	item.Tags = []string{"ai"}
+	if err := db.UpsertFeedItems(ctx, []domain.FeedItem{item}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetSaved(ctx, item.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	recommendations := &countingRecommendationStore{RecommendationStore: db}
+	stores := serviceStoresFromFeedStore(db)
+	stores.Recommendations = recommendations
+	service := NewServiceWithStores(stores, httpx.New(time.Second), nil)
+
+	if _, err := service.LoadFeed(ctx, domain.SourceAll, FeedFilter{}); err != nil {
+		t.Fatal(err)
+	}
+	if recommendations.replaceCalls != 0 {
+		t.Fatalf("LoadFeed replaced recommendation scores %d times, want 0", recommendations.replaceCalls)
+	}
+}
+
 func openAppTestStore(t *testing.T) *store.Store {
 	t.Helper()
 	db, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "tildewire.db"))

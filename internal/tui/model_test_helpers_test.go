@@ -69,6 +69,7 @@ type fakeService struct {
 	ignoredCandidateKey string
 	cacheCleared        bool
 	itemEvents          []domain.ItemEvent
+	recordErr           error
 	diagnostics         domain.RecommendationDiagnostics
 	diagnosticsCalls    int
 	enabledSources      []domain.SourceID
@@ -149,7 +150,14 @@ func (f *fakeService) SetHidden(_ context.Context, _ string, hidden bool) error 
 }
 
 func (f *fakeService) RecordItemEvent(_ context.Context, event domain.ItemEvent) error {
+	if f.recordErr != nil {
+		return f.recordErr
+	}
 	f.itemEvents = append(f.itemEvents, event)
+	return nil
+}
+
+func (f *fakeService) RefreshRecommendations(context.Context) error {
 	return nil
 }
 

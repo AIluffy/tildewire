@@ -51,7 +51,7 @@ func TestRefreshPassesForceAndMarksStale(t *testing.T) {
 func TestServiceRuntimeConfigConcurrentAccess(t *testing.T) {
 	github := &fakeAdapter{source: domain.SourceGitHub}
 	hn := &fakeAdapter{source: domain.SourceHackerNews}
-	service := NewService(nil, nil, []SourceAdapter{github, hn})
+	service := newRuntimeConfigTestService([]SourceAdapter{github, hn})
 
 	var wg sync.WaitGroup
 	for i := 0; i < 16; i++ {
@@ -149,7 +149,7 @@ func TestEnsureRecommendationsKeepsDirtyMarkFromConcurrentMutation(t *testing.T)
 
 	recomputeDone := make(chan error, 1)
 	go func() {
-		recomputeDone <- service.ensureRecommendations(ctx, domain.SourceAll)
+		recomputeDone <- service.RefreshRecommendations(ctx)
 	}()
 	select {
 	case <-replaceStarted:
@@ -451,7 +451,7 @@ func TestSourceConfigFiltersDisabledSourcesFromCachedAllView(t *testing.T) {
 func TestSourceConfigUpdatesAdapterTokens(t *testing.T) {
 	github := &fakeAdapter{source: domain.SourceGitHub}
 	productHunt := &fakeAdapter{source: domain.SourceProductHunt}
-	service := NewService(nil, nil, []SourceAdapter{github, productHunt})
+	service := newRuntimeConfigTestService([]SourceAdapter{github, productHunt})
 
 	service.SetSourceConfig(nil, map[domain.SourceID]string{
 		domain.SourceGitHub:      "gh-token",
@@ -460,6 +460,18 @@ func TestSourceConfigUpdatesAdapterTokens(t *testing.T) {
 
 	if github.token != "gh-token" || productHunt.token != "ph-token" {
 		t.Fatalf("tokens not applied: github=%q producthunt=%q", github.token, productHunt.token)
+	}
+}
+
+func newRuntimeConfigTestService(adapters []SourceAdapter) *Service {
+	ordered := orderedAdapters(adapters)
+	enabled := enabledSourceSet(nil)
+	return &Service{
+		adapters:            ordered,
+		sources:             countSources(ordered, enabled),
+		enabled:             enabled,
+		recommendationDirty: true,
+		recommendationGen:   1,
 	}
 }
 

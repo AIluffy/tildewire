@@ -70,7 +70,7 @@ func NewModel(service FeedService, initial app.Snapshot, options ...ModelOptions
 	}
 	imagePreviewer := modelOptions.ImagePreviewer
 	if imagePreviewer == nil {
-		imagePreviewer = newTerminalMarkdownImagePreviewer(modelOptions.Config.CacheDir)
+		imagePreviewer = newTerminalMarkdownImagePreviewer(modelOptions.Config.CacheDir, config.UserAgent(modelOptions.Config.Version))
 	}
 	imageManager := modelOptions.Images
 	if imageManager == nil {
@@ -325,7 +325,7 @@ func (m Model) handleSpinnerTickMsg(msg spinner.TickMsg) (Model, tea.Cmd) {
 }
 
 func (m Model) handleDetailMsg(msg detailMsg) (Model, tea.Cmd) {
-	if msg.itemID != m.detailEntryID {
+	if !m.overlayIs(overlayDetail) || msg.requestID != m.detailRequestID || msg.itemID != m.detailEntryID {
 		return m, nil
 	}
 	m.clearDetailContentCache()
@@ -344,7 +344,7 @@ func (m Model) handleDetailMsg(msg detailMsg) (Model, tea.Cmd) {
 }
 
 func (m Model) handleMarkdownImagePreviewMsg(msg markdownImagePreviewMsg) (Model, tea.Cmd) {
-	if msg.itemID != m.detailEntryID {
+	if !m.overlayIs(overlayDetail) || msg.requestID != m.detailRequestID || msg.itemID != m.detailEntryID {
 		return m, nil
 	}
 	state := m.imagePreviews[msg.key]

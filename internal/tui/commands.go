@@ -77,7 +77,7 @@ func (m Model) loadThenRefreshCmd() tea.Cmd {
 
 func (m Model) loadSnapshotCmd(message string, customize func(*snapshotMsg)) tea.Cmd {
 	return timeoutCmd(defaultCommandTimeout, func(ctx context.Context) tea.Msg {
-		snapshot, err := m.service.LoadFeed(ctx, m.view, m.filter)
+		snapshot, err := m.loadFeedSnapshot(ctx, m.view, m.filter)
 		msg := snapshotMsg{snapshot: snapshot, err: err, message: message}
 		if customize != nil {
 			customize(&msg)
@@ -187,7 +187,7 @@ func (m Model) setItemStateCmd(itemID string, message string, canPatch func() bo
 		if err := mutate(ctx, itemID); err != nil {
 			return statusMsg{message: "item state failed", err: err}
 		}
-		snapshot, err := m.service.LoadFeed(ctx, m.view, m.filter)
+		snapshot, err := m.loadFeedSnapshot(ctx, m.view, m.filter)
 		if err != nil {
 			snapshot = m.currentSnapshot()
 		}
@@ -195,10 +195,18 @@ func (m Model) setItemStateCmd(itemID string, message string, canPatch func() bo
 	})
 }
 
+func (m Model) loadFeedSnapshot(ctx context.Context, view domain.SourceID, filter app.FeedFilter) (app.Snapshot, error) {
+	if err := m.service.RefreshRecommendations(ctx); err != nil {
+		return app.Snapshot{}, err
+	}
+	return m.service.LoadFeed(ctx, view, filter)
+}
+
 func (m Model) loadDetailCmd(entry domain.FeedEntry) tea.Cmd {
+	requestID := m.detailRequestID
 	return timeoutCmd(detailCommandTimeout, func(ctx context.Context) tea.Msg {
 		detail, err := m.service.LoadDetail(ctx, entry)
-		return detailMsg{itemID: entry.Item.ID, detail: detail, err: err}
+		return detailMsg{requestID: requestID, itemID: entry.Item.ID, detail: detail, err: err}
 	})
 }
 
@@ -209,14 +217,14 @@ func (m Model) recommendDiagnosticsCmd(entry domain.FeedEntry) tea.Cmd {
 	})
 }
 
-func (m Model) markdownImagePreviewCmd(itemID string, key markdownImagePreviewKey, request markdownImagePreviewRequest) tea.Cmd {
+func (m Model) markdownImagePreviewCmd(requestID int, itemID string, key markdownImagePreviewKey, request markdownImagePreviewRequest) tea.Cmd {
 	previewer := m.imagePreviewer
 	return timeoutCmd(detailCommandTimeout, func(ctx context.Context) tea.Msg {
 		if previewer == nil {
-			return markdownImagePreviewMsg{itemID: itemID, key: key, err: fmt.Errorf("markdown image previewer is not configured")}
+			return markdownImagePreviewMsg{requestID: requestID, itemID: itemID, key: key, err: fmt.Errorf("markdown image previewer is not configured")}
 		}
 		result, err := previewer.RenderMarkdownImage(ctx, request)
-		return markdownImagePreviewMsg{itemID: itemID, key: key, result: result, err: err}
+		return markdownImagePreviewMsg{requestID: requestID, itemID: itemID, key: key, result: result, err: err}
 	})
 }
 
@@ -271,7 +279,9 @@ func (m Model) openEntryURLCmd(entry domain.FeedEntry, url string, eventType dom
 	return func() tea.Msg {
 		err := openExternalURL(url)
 		if err == nil && strings.TrimSpace(url) != "" {
-			m.recordItemEvent(entry, eventType)
+			if eventErr := m.recordItemEvent(entry, eventType); eventErr != nil {
+				return statusMsg{message: "opened url; event not recorded", err: eventErr}
+			}
 		}
 		return statusMsg{message: "opened url", err: err}
 	}
@@ -314,20 +324,25 @@ func (m Model) copyEntryValueCmd(entry domain.FeedEntry, value, message, toast s
 		if err := writeClipboard(value); err != nil {
 			return statusMsg{message: "copy failed", err: err}
 		}
-		m.recordItemEvent(entry, eventType)
+		if err := m.recordItemEvent(entry, eventType); err != nil {
+			return statusMsg{message: message + "; event not recorded", toast: toast, err: err}
+		}
 		return statusMsg{message: message, toast: toast}
 	}
 }
 
-func (m Model) recordItemEvent(entry domain.FeedEntry, eventType domain.ItemEventType) {
+func (m Model) recordItemEvent(entry domain.FeedEntry, eventType domain.ItemEventType) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_ = m.service.RecordItemEvent(ctx, domain.ItemEvent{
+	if err := m.service.RecordItemEvent(ctx, domain.ItemEvent{
 		ItemID:    entry.Item.ID,
 		EventType: eventType,
 		Source:    entry.PrimarySource().Source,
 		View:      m.view,
-	})
+	}); err != nil {
+		return fmt.Errorf("record item event: %w", err)
+	}
+	return nil
 }
 
 func clearToastCmd(id int) tea.Cmd {
@@ -366,16 +381,18 @@ type refreshProgressMsg struct {
 }
 
 type detailMsg struct {
-	itemID string
-	detail domain.ItemDetail
-	err    error
+	requestID int
+	itemID    string
+	detail    domain.ItemDetail
+	err       error
 }
 
 type markdownImagePreviewMsg struct {
-	itemID string
-	key    markdownImagePreviewKey
-	result markdownImagePreviewResult
-	err    error
+	requestID int
+	itemID    string
+	key       markdownImagePreviewKey
+	result    markdownImagePreviewResult
+	err       error
 }
 
 type recommendDiagnosticsMsg struct {

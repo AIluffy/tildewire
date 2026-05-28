@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -170,6 +171,35 @@ func TestModelOpenAndCopyCommandsRecordRecommendationEvents(t *testing.T) {
 	}
 	if service.itemEvents[0].ItemID != snapshot.Entries[0].Item.ID || service.itemEvents[1].ItemID != snapshot.Entries[0].Item.ID {
 		t.Fatalf("recorded item ids = %+v", service.itemEvents)
+	}
+}
+
+func TestModelCopyCommandReportsRecommendationEventFailure(t *testing.T) {
+	previousClipboard := writeClipboard
+	defer func() {
+		writeClipboard = previousClipboard
+	}()
+	writeClipboard = func(string) error {
+		return nil
+	}
+
+	snapshot := tuiSnapshot(false)
+	service := &fakeService{snapshot: snapshot, recordErr: errors.New("store unavailable")}
+	model := NewModel(service, snapshot)
+
+	_, copyCmd := model.Update(keyPress("y"))
+	if copyCmd == nil {
+		t.Fatal("expected copy command")
+	}
+	status, ok := copyCmd().(statusMsg)
+	if !ok {
+		t.Fatalf("copy command returned %T, want statusMsg", status)
+	}
+	if status.err == nil {
+		t.Fatal("copy status err is nil, want recommendation event error")
+	}
+	if !strings.Contains(status.message, "event not recorded") {
+		t.Fatalf("copy status message = %q, want event failure context", status.message)
 	}
 }
 

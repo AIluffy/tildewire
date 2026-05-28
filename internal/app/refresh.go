@@ -24,6 +24,9 @@ func (s *Service) Refresh(ctx context.Context, view domain.SourceID, filter Feed
 		}
 	}
 	s.markRecommendationsDirty()
+	if err := s.RefreshRecommendations(ctx); err != nil {
+		refreshErrs = append(refreshErrs, err)
+	}
 	snapshot, loadErr := s.loadFeedAfterRefresh(ctx, view, filter)
 	if loadErr != nil {
 		refreshErrs = append(refreshErrs, loadErr)

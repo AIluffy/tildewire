@@ -2,6 +2,9 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -78,6 +81,9 @@ func NewService(store FeedStore, client httpx.Requester, adapters []SourceAdapte
 
 // NewServiceWithStores creates an application service from role-specific stores.
 func NewServiceWithStores(stores ServiceStores, client httpx.Requester, adapters []SourceAdapter) *Service {
+	if err := stores.validate(); err != nil {
+		panic(err)
+	}
 	ordered := orderedAdapters(adapters)
 	enabled := enabledSourceSet(nil)
 	return &Service{
@@ -95,6 +101,51 @@ func NewServiceWithStores(stores ServiceStores, client httpx.Requester, adapters
 		enabled:             enabled,
 		recommendationDirty: true,
 		recommendationGen:   1,
+	}
+}
+
+func (stores ServiceStores) validate() error {
+	var missing []string
+	if missingStore(stores.Feeds) {
+		missing = append(missing, "Feeds")
+	}
+	if missingStore(stores.FeedWriter) {
+		missing = append(missing, "FeedWriter")
+	}
+	if missingStore(stores.Items) {
+		missing = append(missing, "Items")
+	}
+	if missingStore(stores.SourceTelemetry) {
+		missing = append(missing, "SourceTelemetry")
+	}
+	if missingStore(stores.Personalization) {
+		missing = append(missing, "Personalization")
+	}
+	if missingStore(stores.Recommendations) {
+		missing = append(missing, "Recommendations")
+	}
+	if missingStore(stores.Dedupe) {
+		missing = append(missing, "Dedupe")
+	}
+	if missingStore(stores.Cache) {
+		missing = append(missing, "Cache")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("service stores missing %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+func missingStore(store any) bool {
+	if store == nil {
+		return true
+	}
+	value := reflect.ValueOf(store)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
 	}
 }
 
@@ -152,9 +203,6 @@ func (s *Service) SetHTTPCacheTTL(ttl time.Duration) {
 // LoadFeed loads cached visible items for a view and filter.
 func (s *Service) LoadFeed(ctx context.Context, view domain.SourceID, filter FeedFilter) (Snapshot, error) {
 	view, filter = s.normalizeLoadFeedRequest(view, filter)
-	if err := s.ensureRecommendations(ctx, view); err != nil {
-		return Snapshot{}, err
-	}
 	query := feedQueryForLoad(view, filter)
 	entries, rules, err := s.loadFeedEntries(ctx, view, filter, query)
 	if err != nil {
@@ -300,8 +348,9 @@ func (s *Service) markRecommendationsDirtyLocked() {
 	s.recommendationGen++
 }
 
-func (s *Service) ensureRecommendations(ctx context.Context, view domain.SourceID) error {
-	dirty, generation := s.recommendationState(view)
+// RefreshRecommendations refreshes durable recommendation scores when their inputs changed.
+func (s *Service) RefreshRecommendations(ctx context.Context) error {
+	dirty, generation := s.recommendationState()
 	if !dirty {
 		return nil
 	}
@@ -320,14 +369,14 @@ func (s *Service) markRecommendationsClean(generation uint64) {
 	}
 }
 
-func (s *Service) recommendationState(view domain.SourceID) (bool, uint64) {
+func (s *Service) recommendationState() (bool, uint64) {
 	s.runtimeMu.RLock()
 	defer s.runtimeMu.RUnlock()
-	return s.recommendationDirty || view == domain.SourceRecommend, s.recommendationGen
+	return s.recommendationDirty, s.recommendationGen
 }
 
-func (s *Service) recommendationsDirty(view domain.SourceID) bool {
+func (s *Service) recommendationsDirty(_ domain.SourceID) bool {
 	s.runtimeMu.RLock()
 	defer s.runtimeMu.RUnlock()
-	return s.recommendationDirty || view == domain.SourceRecommend
+	return s.recommendationDirty
 }

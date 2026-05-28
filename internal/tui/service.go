@@ -10,6 +10,7 @@ import (
 
 type feedLoader interface {
 	LoadFeed(context.Context, domain.SourceID, app.FeedFilter) (app.Snapshot, error)
+	RefreshRecommendations(context.Context) error
 	Refresh(context.Context, domain.SourceID, app.FeedFilter, app.RefreshOptions) (app.Snapshot, error)
 	ClearCache(context.Context, domain.SourceID, app.FeedFilter) (app.Snapshot, error)
 }

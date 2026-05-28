@@ -56,6 +56,7 @@ type refreshState struct {
 type detailState struct {
 	detailLoading        bool
 	detailEntryID        string
+	detailRequestID      int
 	itemDetail           domain.ItemDetail
 	detailError          string
 	detailOffset         int

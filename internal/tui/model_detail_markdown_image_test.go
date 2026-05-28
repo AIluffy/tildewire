@@ -34,6 +34,36 @@ func TestModelPreviewDoesNotLoadDetail(t *testing.T) {
 	}
 }
 
+func TestDetailBackInvalidatesPendingDetailLoad(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	entry := snapshot.Entries[0]
+	model.openDetail(entry)
+	if !model.detailLoading || model.detailEntryID != entry.Item.ID {
+		t.Fatalf("detail state was not initialized: loading=%v item=%q", model.detailLoading, model.detailEntryID)
+	}
+
+	model, _ = detailBack(model)
+	if model.detailLoading || model.detailEntryID != "" {
+		t.Fatalf("detail state survived close: loading=%v item=%q", model.detailLoading, model.detailEntryID)
+	}
+
+	late := detailMsg{
+		itemID: entry.Item.ID,
+		detail: domain.ItemDetail{
+			ItemID: entry.Item.ID,
+			Title:  "late detail",
+		},
+	}
+	model, cmd := model.handleDetailMsg(late)
+	if cmd != nil {
+		t.Fatal("late detail message returned a command after detail closed")
+	}
+	if model.itemDetail.ItemID != "" || model.message == "detail loaded" {
+		t.Fatalf("late detail mutated closed state: detail=%+v message=%q", model.itemDetail, model.message)
+	}
+}
+
 func TestModelHealthViewRendersSourceDetailsAndKeepsHelp(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	now := time.Date(2026, 5, 10, 10, 0, 0, 0, time.UTC)

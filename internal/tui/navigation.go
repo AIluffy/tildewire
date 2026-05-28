@@ -68,13 +68,26 @@ func (m *Model) clampFeedSelection() {
 func (m *Model) openDetail(entry domain.FeedEntry) {
 	m.clearDetailContentCache()
 	m.openOverlay(overlayDetail)
+	m.detailRequestID++
 	m.detailLoading = true
 	m.detailEntryID = entry.Item.ID
 	m.itemDetail = domain.ItemDetail{ItemID: entry.Item.ID, Title: entry.Item.Title, URL: entry.Item.URL}
 	m.detailError = ""
 	m.detailOffset = 0
+	m.detailImageVersion++
 	m.message = "loading detail"
 	m.refreshDetailContentCache()
+}
+
+func (m *Model) clearDetailState() {
+	m.clearDetailContentCache()
+	m.detailRequestID++
+	m.detailLoading = false
+	m.detailEntryID = ""
+	m.itemDetail = domain.ItemDetail{}
+	m.detailError = ""
+	m.detailOffset = 0
+	m.detailImageVersion++
 }
 
 func (m *Model) moveFocus(delta int) {

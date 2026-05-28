@@ -89,5 +89,8 @@ func (s *Service) reloadAfter(ctx context.Context, view domain.SourceID, filter 
 		return Snapshot{}, err
 	}
 	s.markRecommendationsDirty()
+	if err := s.RefreshRecommendations(ctx); err != nil {
+		return Snapshot{}, err
+	}
 	return s.LoadFeed(ctx, view, filter)
 }

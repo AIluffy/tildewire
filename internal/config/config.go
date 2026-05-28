@@ -39,6 +39,15 @@ const (
 	markdownImagePreviewLegacyChafa = "chafa"
 )
 
+// UserAgent returns the outbound HTTP user agent for this build.
+func UserAgent(version string) string {
+	version = strings.TrimSpace(version)
+	if version == "" {
+		version = "dev"
+	}
+	return "tildewire/" + version
+}
+
 // Config contains resolved paths and startup switches.
 type Config struct {
 	ConfigPath           string
