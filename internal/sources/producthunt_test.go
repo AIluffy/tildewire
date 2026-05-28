@@ -3,9 +3,11 @@ package sources
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -79,6 +81,51 @@ func TestProductHuntFetchBuildsGraphQLRequest(t *testing.T) {
 	if request.Variables["postedAfter"] != "2026-05-05T07:00:00Z" || request.Variables["postedBefore"] != "2026-05-13T07:00:00Z" {
 		t.Fatalf("date variables = %+v", request.Variables)
 	}
+}
+
+func TestProductHuntTokenConcurrentWithAuthAndFetch(t *testing.T) {
+	adapter := ProductHuntAdapter{
+		Token: "initial",
+		Now:   func() time.Time { return time.Date(2026, 5, 12, 15, 30, 0, 0, time.UTC) },
+	}
+	client := staticRequester{body: []byte(productHuntFixture)}
+	scope := domain.FetchScope{Source: domain.SourceProductHunt, View: "today", Limit: 5}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			for j := 0; j < 25; j++ {
+				adapter.SetToken(fmt.Sprintf("token-%d-%d", idx, j))
+			}
+		}(i)
+	}
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 25; j++ {
+				_, _ = adapter.AuthRequired()
+				if _, err := adapter.Fetch(context.Background(), scope, client); err != nil {
+					t.Errorf("Fetch: %v", err)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+type staticRequester struct {
+	body []byte
+}
+
+func (r staticRequester) DoGET(context.Context, httpx.GetOptions) (httpx.Response, error) {
+	return httpx.Response{Body: r.body, FetchedAt: time.Now().UTC()}, nil
+}
+
+func (r staticRequester) DoPOSTJSON(context.Context, httpx.PostOptions) (httpx.Response, error) {
+	return httpx.Response{Body: r.body, FetchedAt: time.Now().UTC()}, nil
 }
 
 func TestProductHuntRequestUsesProductHuntLaunchDay(t *testing.T) {

@@ -247,12 +247,12 @@ func TestStoreListFeedSearchUsesFTSAndReindexesItems(t *testing.T) {
 	item.Organization = "Tilde Labs"
 	item.Language = "Go"
 	item.Tags = []string{"observability", "daily-signal"}
-	item.Metadata = []byte(`{"engine":"sqlite fts5","topic":"source health"}`)
+	item.Metadata = []byte(`{"engine":"sqlite fts5","topic":"source health","punctuation_noise":"json-key-only"}`)
 	if err := store.UpsertFeedItems(ctx, []domain.FeedItem{item}); err != nil {
 		t.Fatal(err)
 	}
 
-	for _, search := range []string{"observability", "fts5", "SQLite: FTS5!"} {
+	for _, search := range []string{"observability", "SQLite Search"} {
 		entries, err := store.ListFeed(ctx, FeedQuery{Search: search})
 		if err != nil {
 			t.Fatalf("search %q failed: %v", search, err)
@@ -260,6 +260,20 @@ func TestStoreListFeedSearchUsesFTSAndReindexesItems(t *testing.T) {
 		if len(entries) != 1 || entries[0].Item.ID != item.ID {
 			t.Fatalf("search %q returned %+v, want indexed item", search, entries)
 		}
+	}
+	entries, err := store.ListFeed(ctx, FeedQuery{Search: "fts5"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("metadata JSON value should not be indexed as natural language, got %+v", entries)
+	}
+	entries, err = store.ListFeed(ctx, FeedQuery{Search: "punctuation_noise"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("metadata JSON key should not be indexed as natural language, got %+v", entries)
 	}
 	if _, err := store.ListFeed(ctx, FeedQuery{Search: "!!!"}); err != nil {
 		t.Fatalf("punctuation-only search should not error: %v", err)
@@ -272,7 +286,7 @@ func TestStoreListFeedSearchUsesFTSAndReindexesItems(t *testing.T) {
 	if err := store.UpsertFeedItems(ctx, []domain.FeedItem{item}); err != nil {
 		t.Fatal(err)
 	}
-	entries, err := store.ListFeed(ctx, FeedQuery{Search: "observability"})
+	entries, err = store.ListFeed(ctx, FeedQuery{Search: "observability"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,6 +299,67 @@ func TestStoreListFeedSearchUsesFTSAndReindexesItems(t *testing.T) {
 	}
 	if len(entries) != 1 || entries[0].Item.ID != item.ID {
 		t.Fatalf("updated indexed content missing: %+v", entries)
+	}
+}
+
+func TestStoreListAndCountFeedStayConsistentForFilters(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t)
+	defer store.Close()
+
+	hnTop := testItem("hn-top", "hackernews:top", "Go terminal agent", 1)
+	hnTop.Language = "Go"
+	hnTop.Tags = []string{"terminal"}
+	hnBest := testItem("hn-best", "hackernews:best", "Rust search engine", 2)
+	hnBest.Sources[0].SourceView = "best"
+	hnBest.Language = "Rust"
+	hnBest.Tags = []string{"search"}
+	github := testSourceItem("repo-agent", "repo:owner/agent", "Owner agent", domain.SourceGitHub, 1)
+	github.Language = "Go"
+	github.Tags = []string{"terminal"}
+	hidden := testItem("hn-hidden", "hackernews:hidden", "Hidden terminal agent", 3)
+	if err := store.UpsertFeedItems(ctx, []domain.FeedItem{hnTop, hnBest, github, hidden}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetSaved(ctx, hnTop.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetRead(ctx, hnBest.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetHidden(ctx, hidden.ID, true); err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name string
+		q    FeedQuery
+		want []string
+	}{
+		{name: "default hides hidden", q: FeedQuery{}, want: []string{hnTop.ID, hnBest.ID, github.ID}},
+		{name: "include hidden", q: FeedQuery{IncludeHidden: true}, want: []string{hnTop.ID, hnBest.ID, github.ID, hidden.ID}},
+		{name: "source and source view", q: FeedQuery{Source: domain.SourceHackerNews, SourceView: "top"}, want: []string{hnTop.ID}},
+		{name: "search", q: FeedQuery{Search: "agent"}, want: []string{hnTop.ID, github.ID}},
+		{name: "saved search source", q: FeedQuery{Source: domain.SourceHackerNews, Search: "agent", SavedOnly: true}, want: []string{hnTop.ID}},
+		{name: "unread language tag", q: FeedQuery{UnreadOnly: true, Language: "go", Tag: "terminal"}, want: []string{hnTop.ID, github.ID}},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			entries, err := store.ListFeed(ctx, tt.q)
+			if err != nil {
+				t.Fatal(err)
+			}
+			count, err := store.CountFeed(ctx, tt.q)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if count != len(entries) {
+				t.Fatalf("count = %d, list len = %d, entries=%+v", count, len(entries), entries)
+			}
+			if got := storeEntryIDs(entries); !sameStringSet(got, tt.want) {
+				t.Fatalf("ids = %+v, want set %+v", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -590,6 +665,32 @@ func TestStoreRecommendationScoresRoundTripAndFilters(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("filtered recommendation count = %d, want 1", count)
+	}
+	for _, tt := range []struct {
+		name string
+		q    domain.FeedQuery
+		want []string
+	}{
+		{name: "saved search language tag", q: domain.FeedQuery{Search: "terminal", SavedOnly: true, Language: "go", Tag: "ai"}, want: []string{goItem.ID}},
+		{name: "unread", q: domain.FeedQuery{UnreadOnly: true}, want: []string{goItem.ID}},
+		{name: "python language tag", q: domain.FeedQuery{Language: "python", Tag: "launch"}, want: []string{pythonItem.ID}},
+	} {
+		t.Run("recommended count/list "+tt.name, func(t *testing.T) {
+			entries, err := store.ListRecommendedFeed(ctx, tt.q)
+			if err != nil {
+				t.Fatal(err)
+			}
+			count, err := store.CountRecommendedFeed(ctx, tt.q)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if count != len(entries) {
+				t.Fatalf("count = %d, list len = %d, entries=%+v", count, len(entries), entries)
+			}
+			if got := storeEntryIDs(entries); !sameStringSet(got, tt.want) {
+				t.Fatalf("ids = %+v, want set %+v", got, tt.want)
+			}
+		})
 	}
 	entries, err = store.ListRecommendedFeed(ctx, domain.FeedQuery{UnreadOnly: true})
 	if err != nil {
@@ -988,6 +1089,31 @@ func findStoreStatus(statuses []domain.SourceHealth, source domain.SourceID) dom
 		}
 	}
 	return ""
+}
+
+func storeEntryIDs(entries []domain.FeedEntry) []string {
+	ids := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		ids = append(ids, entry.Item.ID)
+	}
+	return ids
+}
+
+func sameStringSet(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	seen := make(map[string]int, len(got))
+	for _, value := range got {
+		seen[value]++
+	}
+	for _, value := range want {
+		if seen[value] == 0 {
+			return false
+		}
+		seen[value]--
+	}
+	return true
 }
 
 func testItem(id, key, title string, rank int) domain.FeedItem {

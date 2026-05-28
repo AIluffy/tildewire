@@ -11,35 +11,8 @@ import (
 )
 
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if m.settingsOpen {
-		return m.handleSettingsKey(msg)
-	}
-	if m.ruleForm != nil {
-		return m.handleRuleFormKey(msg)
-	}
-	if m.paletteOpen {
-		return m.handlePaletteKey(msg)
-	}
-	if m.filterOpen {
-		return m.handleFilterKey(msg)
-	}
-	if m.rulesOpen {
-		return m.handleRulesKey(msg)
-	}
-	if m.dedupeOpen {
-		return m.handleDedupeKey(msg)
-	}
-	if m.recommendDiagnosticsOpen {
-		return m.handleRecommendDiagnosticsKey(msg)
-	}
-	if m.health {
-		return m.handleHealthKey(msg)
-	}
-	if m.mode == inputModeSearch {
-		return m.handleSearchKey(msg)
-	}
-	if m.detail {
-		return m.handleDetailKey(msg)
+	if overlay := m.activeOverlay(); overlay != overlayNone {
+		return m.handleOverlayKey(overlay, msg)
 	}
 	if next, cmd, ok := m.switchSourceByKey(msg); ok {
 		return next, cmd

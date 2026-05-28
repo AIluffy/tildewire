@@ -84,10 +84,7 @@ func (s *Service) recommendationCandidateEntries(ctx context.Context) ([]domain.
 		return nil, err
 	}
 	addEntries(latestEntries)
-	for _, source := range s.sources {
-		if !s.sourceEnabled(source) {
-			continue
-		}
+	for _, source := range s.sourceIDsSnapshot() {
 		sourceViews := s.recommendationCandidateSourceViews(source)
 		for _, sourceView := range sourceViews {
 			entries, err := s.store.ListFeed(ctx, domain.FeedQuery{

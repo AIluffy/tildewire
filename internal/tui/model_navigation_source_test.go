@@ -28,6 +28,27 @@ func TestModelMovesSelection(t *testing.T) {
 	}
 }
 
+func TestNewModelDefaultsToRecommendView(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	snapshot.View = ""
+	service := &fakeService{snapshot: snapshot}
+	model := NewModel(service, snapshot)
+
+	if model.view != domain.SourceRecommend {
+		t.Fatalf("default view = %s, want recommend", model.view)
+	}
+	if model.filter.SourceView != "" {
+		t.Fatalf("default recommend source view = %q, want empty", model.filter.SourceView)
+	}
+	msg := model.loadCmd()()
+	if _, ok := msg.(snapshotMsg); !ok {
+		t.Fatalf("load command message = %T, want snapshotMsg", msg)
+	}
+	if service.lastLoadView != domain.SourceRecommend {
+		t.Fatalf("default load view = %s, want recommend", service.lastLoadView)
+	}
+}
+
 func TestModelSaveCommandReloadsSnapshot(t *testing.T) {
 	service := &fakeService{snapshot: tuiSnapshot(true)}
 	model := NewModel(service, tuiSnapshot(false))
@@ -43,6 +64,57 @@ func TestModelSaveCommandReloadsSnapshot(t *testing.T) {
 	}
 	if !model.entries[0].State.Saved {
 		t.Fatalf("saved state not reflected: %+v", model.entries[0].State)
+	}
+}
+
+func TestModelSourceViewSavePatchesStateWithoutFeedReload(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	snapshot.View = domain.SourceHackerNews
+	service := &fakeService{snapshot: snapshot}
+	model := NewModel(service, snapshot)
+
+	updated, cmd := model.Update(keyPress("s"))
+	if cmd == nil {
+		t.Fatal("expected save command")
+	}
+	msg := cmd()
+	updated, _ = updated.Update(msg)
+	model = updated.(Model)
+
+	if !service.savedCalled {
+		t.Fatal("service SetSaved was not called")
+	}
+	if service.lastLoadView != "" {
+		t.Fatalf("source-view state patch should not reload feed, loaded %s", service.lastLoadView)
+	}
+	if !model.entries[0].State.Saved {
+		t.Fatalf("saved state not patched: %+v", model.entries[0].State)
+	}
+}
+
+func TestModelSourceViewHiddenWithIncludeHiddenPatchesStateWithoutFeedReload(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	snapshot.View = domain.SourceHackerNews
+	snapshot.Filter.IncludeHidden = true
+	service := &fakeService{snapshot: snapshot}
+	model := NewModel(service, snapshot)
+
+	updated, cmd := model.Update(keyPress("h"))
+	if cmd == nil {
+		t.Fatal("expected hide command")
+	}
+	msg := cmd()
+	updated, _ = updated.Update(msg)
+	model = updated.(Model)
+
+	if !service.lastHiddenValue {
+		t.Fatal("service SetHidden should hide item")
+	}
+	if service.lastLoadView != "" {
+		t.Fatalf("source-view hidden state patch should not reload feed, loaded %s", service.lastLoadView)
+	}
+	if !model.entries[0].State.Hidden {
+		t.Fatalf("hidden state not patched: %+v", model.entries[0].State)
 	}
 }
 

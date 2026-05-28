@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AIluffy/tildewire/internal/domain"
@@ -30,6 +31,7 @@ type ProductHuntAdapter struct {
 	BaseURL string
 	Token   string
 	Now     func() time.Time
+	tokenMu sync.RWMutex
 }
 
 // NewProductHuntAdapter creates the Product Hunt source adapter.
@@ -39,24 +41,26 @@ func NewProductHuntAdapter(token string) *ProductHuntAdapter {
 
 // SetToken updates the token used for Product Hunt GraphQL requests.
 func (a *ProductHuntAdapter) SetToken(token string) {
+	a.tokenMu.Lock()
+	defer a.tokenMu.Unlock()
 	a.Token = strings.TrimSpace(token)
 }
 
 // Source returns the adapter source id.
-func (a ProductHuntAdapter) Source() domain.SourceID {
+func (a *ProductHuntAdapter) Source() domain.SourceID {
 	return domain.SourceProductHunt
 }
 
 // AuthRequired reports whether Product Hunt should wait for an access token before refresh.
-func (a ProductHuntAdapter) AuthRequired() (bool, string) {
-	if strings.TrimSpace(a.Token) == "" {
+func (a *ProductHuntAdapter) AuthRequired() (bool, string) {
+	if a.token() == "" {
 		return true, productHuntAuthRequiredMessage
 	}
 	return false, ""
 }
 
 // DefaultScopes returns Product Hunt scopes for v0.2.
-func (a ProductHuntAdapter) DefaultScopes() []domain.FetchScope {
+func (a *ProductHuntAdapter) DefaultScopes() []domain.FetchScope {
 	return []domain.FetchScope{
 		{Source: domain.SourceProductHunt, View: "today", Limit: 25},
 		{Source: domain.SourceProductHunt, View: "weekly", Limit: 25},
@@ -64,8 +68,9 @@ func (a ProductHuntAdapter) DefaultScopes() []domain.FetchScope {
 }
 
 // Fetch posts the Product Hunt GraphQL query for one source view.
-func (a ProductHuntAdapter) Fetch(ctx context.Context, scope domain.FetchScope, client httpx.Requester) (*domain.FetchResult, error) {
-	if strings.TrimSpace(a.Token) == "" {
+func (a *ProductHuntAdapter) Fetch(ctx context.Context, scope domain.FetchScope, client httpx.Requester) (*domain.FetchResult, error) {
+	token := a.token()
+	if token == "" {
 		return nil, ErrProductHuntAuthRequired
 	}
 	scope = normalizeProductHuntScope(scope)
@@ -77,7 +82,7 @@ func (a ProductHuntAdapter) Fetch(ctx context.Context, scope domain.FetchScope, 
 		Source:       string(domain.SourceProductHunt),
 		URL:          a.graphQLURL(),
 		Body:         body,
-		BearerToken:  a.Token,
+		BearerToken:  token,
 		TTL:          a.CachePolicy(scope).TTL,
 		ForceRefresh: scope.ForceRefresh,
 	})
@@ -97,7 +102,7 @@ func (a ProductHuntAdapter) Fetch(ctx context.Context, scope domain.FetchScope, 
 }
 
 // Normalize converts Product Hunt GraphQL JSON into FeedItems.
-func (a ProductHuntAdapter) Normalize(_ context.Context, scope domain.FetchScope, raw *domain.FetchResult) ([]domain.FeedItem, error) {
+func (a *ProductHuntAdapter) Normalize(_ context.Context, scope domain.FetchScope, raw *domain.FetchResult) ([]domain.FeedItem, error) {
 	if raw == nil {
 		return nil, fmt.Errorf("product hunt raw response is nil")
 	}
@@ -133,7 +138,7 @@ func (a ProductHuntAdapter) Normalize(_ context.Context, scope domain.FetchScope
 }
 
 // CachePolicy returns Product Hunt TTLs.
-func (a ProductHuntAdapter) CachePolicy(scope domain.FetchScope) domain.CachePolicy {
+func (a *ProductHuntAdapter) CachePolicy(scope domain.FetchScope) domain.CachePolicy {
 	scope = normalizeProductHuntScope(scope)
 	if scope.View == "weekly" {
 		return domain.CachePolicy{TTL: 2 * time.Hour}
@@ -141,18 +146,24 @@ func (a ProductHuntAdapter) CachePolicy(scope domain.FetchScope) domain.CachePol
 	return domain.CachePolicy{TTL: 30 * time.Minute}
 }
 
-func (a ProductHuntAdapter) graphQLURL() string {
+func (a *ProductHuntAdapter) graphQLURL() string {
 	if strings.TrimSpace(a.BaseURL) == "" {
 		return productHuntGraphQLURL
 	}
 	return strings.TrimSpace(a.BaseURL)
 }
 
-func (a ProductHuntAdapter) now() time.Time {
+func (a *ProductHuntAdapter) now() time.Time {
 	if a.Now != nil {
 		return a.Now().UTC()
 	}
 	return time.Now().UTC()
+}
+
+func (a *ProductHuntAdapter) token() string {
+	a.tokenMu.RLock()
+	defer a.tokenMu.RUnlock()
+	return strings.TrimSpace(a.Token)
 }
 
 type productHuntGraphQLRequest struct {

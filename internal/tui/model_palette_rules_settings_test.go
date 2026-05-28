@@ -241,6 +241,9 @@ func TestModelSettingsFormSavesRuntimeConfig(t *testing.T) {
 	if cmd != nil {
 		t.Fatal("settings should open without an init command")
 	}
+	if model.settingsForm == nil {
+		t.Fatal("expected settings huh form")
+	}
 	if !strings.Contains(model.render(), "SETTINGS") {
 		t.Fatalf("render missing settings form:\n%s", model.render())
 	}
@@ -250,7 +253,8 @@ func TestModelSettingsFormSavesRuntimeConfig(t *testing.T) {
 	model.settingsDraft.EnabledSources = []string{"hackernews"}
 	model.settingsDraft.GitHubToken = "new-gh"
 	model.settingsDraft.ProductHuntToken = "new-ph"
-	updated, cmd := model.applySettingsState(nil)
+	model.settingsForm.State = huh.StateCompleted
+	updated, cmd := model.applySettingsFormState(nil)
 	model = updated.(Model)
 	if cmd == nil {
 		t.Fatal("expected save settings command")
@@ -281,8 +285,14 @@ func TestModelSettingsFormSavesRuntimeConfig(t *testing.T) {
 	if service.tokens[domain.SourceGitHub] != "new-gh" || service.tokens[domain.SourceProductHunt] != "new-ph" {
 		t.Fatalf("service tokens = %+v", service.tokens)
 	}
+	if service.httpCacheTTL != 6*time.Hour {
+		t.Fatalf("service http ttl = %s, want 6h", service.httpCacheTTL)
+	}
 	if model.view != domain.SourceAll {
 		t.Fatalf("disabled active source should switch to all, got %s", model.view)
+	}
+	if model.settingsForm != nil {
+		t.Fatal("settings huh form should clear after submit")
 	}
 	if strings.Contains(model.render(), "SETTINGS") {
 		t.Fatalf("settings form should close after submit:\n%s", model.render())
@@ -303,7 +313,7 @@ func TestModelSettingsRenderGroupsAllSettings(t *testing.T) {
 		},
 	})
 	model.width = 120
-	model.height = 32
+	model.height = 80
 
 	model, cmd := updateModelWithKey(t, model, "c")
 	if cmd != nil {
@@ -323,7 +333,6 @@ func TestModelSettingsRenderGroupsAllSettings(t *testing.T) {
 		"System",
 		"HTTP cache TTL",
 		"Accessible forms",
-		"Save settings",
 	} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("settings layout missing %q:\n%s", want, plain)
@@ -334,9 +343,80 @@ func TestModelSettingsRenderGroupsAllSettings(t *testing.T) {
 	}
 }
 
-func TestModelSettingsRenderFillsScreenWithModuleDividersAndBottomHelp(t *testing.T) {
+func TestModelSettingsSmallScreenMouseWheelScrollsForm(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
+		Config: config.Config{
+			Theme:                "catppuccin",
+			GlamourStyle:         "dark",
+			MarkdownImagePreview: "auto",
+			HTTPCacheTTLHours:    6,
+			EnabledSources:       []string{"github", "hackernews", "huggingface", "lobsters", "producthunt"},
+		},
+	})
+	model.width = 80
+	model.height = 12
+
+	model, cmd := updateModelWithKey(t, model, "c")
+	if cmd != nil {
+		t.Fatal("settings should open without an init command")
+	}
+	initial := ansi.Strip(model.render())
+	if strings.Contains(initial, "Accessible forms") {
+		t.Fatalf("small settings viewport should start at the top:\n%s", initial)
+	}
+	if renderedLineCount(model.render()) > model.height {
+		t.Fatalf("settings render height = %d, want <= %d", renderedLineCount(model.render()), model.height)
+	}
+
+	for range 20 {
+		updated, cmd := model.Update(mouseWheelDown(10, 5))
+		model = updated.(Model)
+		if cmd != nil {
+			t.Fatal("settings wheel scroll should not produce a command")
+		}
+	}
+	scrolled := ansi.Strip(model.render())
+	if model.settingsScrollOffset == 0 {
+		t.Fatal("settings wheel should advance the viewport offset")
+	}
+	if !strings.Contains(scrolled, "Accessible forms") {
+		t.Fatalf("settings wheel should reveal lower fields:\n%s", scrolled)
+	}
+	if renderedLineCount(model.render()) > model.height {
+		t.Fatalf("settings render height after scroll = %d, want <= %d", renderedLineCount(model.render()), model.height)
+	}
+}
+
+func TestModelSettingsSmallScreenPageKeysScrollForm(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
+		Config: config.Config{
+			Theme:                "catppuccin",
+			GlamourStyle:         "dark",
+			MarkdownImagePreview: "auto",
+			HTTPCacheTTLHours:    6,
+			EnabledSources:       []string{"github", "hackernews", "huggingface", "lobsters", "producthunt"},
+		},
+	})
+	model.width = 80
+	model.height = 12
+
+	model, _ = updateModelWithKey(t, model, "c")
+	model, _ = updateModelWithKey(t, model, "pgdown")
+	if model.settingsScrollOffset == 0 {
+		t.Fatal("pgdown should scroll settings on small screens")
+	}
+	model, _ = updateModelWithKey(t, model, "pgup")
+	if model.settingsScrollOffset != 0 {
+		t.Fatalf("pgup should scroll settings back to top, got offset %d", model.settingsScrollOffset)
+	}
+}
+
+func TestModelSettingsFormRejectsEmptySources(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	service := &fakeService{snapshot: snapshot}
+	model := NewModel(service, snapshot, ModelOptions{
 		Config: config.Config{
 			Theme:                "catppuccin",
 			GlamourStyle:         "dark",
@@ -354,59 +434,88 @@ func TestModelSettingsRenderFillsScreenWithModuleDividersAndBottomHelp(t *testin
 	if cmd != nil {
 		t.Fatal("settings should open without an init command")
 	}
+	model.settingsDraft.EnabledSources = nil
+	model.settingsForm.State = huh.StateCompleted
 
-	rendered := model.render()
-	lines := strings.Split(rendered, "\n")
-	if len(lines) != model.height {
-		t.Fatalf("settings lines = %d, want terminal height %d:\n%s", len(lines), model.height, ansi.Strip(rendered))
+	updated, cmd := model.applySettingsFormState(nil)
+	model = updated.(Model)
+	if cmd != nil {
+		t.Fatal("invalid settings should not produce a save command")
 	}
-	if strings.TrimSpace(ansi.Strip(lines[0])) == "" {
-		t.Fatalf("settings should start at top edge:\n%s", ansi.Strip(rendered))
+	if model.message != "settings invalid" {
+		t.Fatalf("message = %q, want settings invalid", model.message)
 	}
-	for idx, line := range lines {
-		if got := ansi.StringWidth(line); got != model.width {
-			t.Fatalf("settings line %d width = %d, want %d: %q", idx, got, model.width, ansi.Strip(line))
-		}
+	if !model.settingsOpen || model.settingsForm == nil {
+		t.Fatal("invalid settings should keep the form open")
 	}
+	if len(service.enabledSources) != 0 {
+		t.Fatalf("service should not be updated for invalid settings: %+v", service.enabledSources)
+	}
+}
 
-	plain := ansi.Strip(rendered)
-	dividers := settingsDividerLineIndexes(lines)
-	if len(dividers) != 3 {
-		t.Fatalf("settings module dividers = %d, want 3:\n%s", len(dividers), plain)
+func TestModelSettingsFormRejectsInvalidTTL(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
+		Config: config.Config{
+			Theme:                "catppuccin",
+			GlamourStyle:         "dark",
+			MarkdownImagePreview: "auto",
+			HTTPCacheTTLHours:    6,
+			EnabledSources:       []string{"github", "hackernews"},
+		},
+	})
+
+	model, _ = updateModelWithKey(t, model, "c")
+	model.settingsDraft.HTTPCacheTTLHours = "not-a-number"
+	model.settingsForm.State = huh.StateCompleted
+	updated, cmd := model.applySettingsFormState(nil)
+	model = updated.(Model)
+
+	if cmd != nil {
+		t.Fatal("invalid ttl should not produce a save command")
 	}
-	for _, label := range []string{"Theme", "GitHub token", "HTTP cache TTL"} {
-		if settingsLineFollowedByDivider(lines, label) {
-			t.Fatalf("setting row %q should not have an item-level divider:\n%s", label, plain)
-		}
+	if model.message != "settings invalid" {
+		t.Fatalf("message = %q, want settings invalid", model.message)
 	}
-	for _, label := range []string{"Markdown image preview", "Visible sources", "Product Hunt token"} {
-		if !settingsLineFollowedByDivider(lines, label) {
-			t.Fatalf("module ending row %q should be followed by a divider:\n%s", label, plain)
-		}
+	if !model.settingsOpen || model.settingsForm == nil {
+		t.Fatal("invalid ttl should keep the form open")
 	}
-	help := settingsLineContent(lines[len(lines)-2])
-	if !strings.Contains(help, " ｜ ") || !strings.Contains(help, "enter save") || !strings.Contains(help, "esc cancel") {
-		t.Fatalf("settings help should be bottom-aligned and separated with full-width bars, got %q", help)
+}
+
+func TestModelSettingsFormCancelDoesNotSave(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	saved := false
+	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
+		Config: config.Config{
+			Theme:                "catppuccin",
+			GlamourStyle:         "dark",
+			MarkdownImagePreview: "auto",
+			HTTPCacheTTLHours:    6,
+			EnabledSources:       []string{"github", "hackernews"},
+		},
+		SaveConfig: func(config.Config) error {
+			saved = true
+			return nil
+		},
+	})
+
+	model, _ = updateModelWithKey(t, model, "c")
+	model.settingsDraft.Theme = "dracula"
+	model.settingsForm.State = huh.StateAborted
+	updated, cmd := model.applySettingsFormState(nil)
+	model = updated.(Model)
+
+	if cmd != nil {
+		t.Fatal("cancel should not produce a save command")
 	}
-	if strings.Contains(help, "  ") {
-		t.Fatalf("settings help should use separators instead of repeated spacing, got %q", help)
+	if saved {
+		t.Fatal("cancel should not save config")
 	}
-	actionLine := -1
-	for idx, line := range lines {
-		if strings.Contains(ansi.Strip(line), "Save settings") {
-			actionLine = idx
-			break
-		}
+	if model.settingsOpen || model.settingsForm != nil {
+		t.Fatal("cancel should close settings form")
 	}
-	if actionLine < 0 {
-		t.Fatalf("settings action row missing:\n%s", plain)
-	}
-	actionContent := settingsContentLineRaw(lines[actionLine])
-	if strings.Index(actionContent, "Save settings") < 55 {
-		t.Fatalf("settings actions should be right aligned, got %q", actionContent)
-	}
-	if actionLine < 2 || settingsLineContent(lines[actionLine-1]) != "" || settingsLineContent(lines[actionLine-2]) != "" {
-		t.Fatalf("settings actions should keep vertical spacing above them:\n%s", plain)
+	if model.config.Theme != "catppuccin" {
+		t.Fatalf("theme changed on cancel: %q", model.config.Theme)
 	}
 }
 
@@ -477,92 +586,7 @@ func TestModelThemeChangesRenderedColors(t *testing.T) {
 	}
 }
 
-func TestModelSettingsMouseClickEditsIndependentToken(t *testing.T) {
-	snapshot := tuiSnapshot(false)
-	saved := false
-	var savedConfig config.Config
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
-		Config: config.Config{
-			GlamourStyle:         "dark",
-			MarkdownImagePreview: "auto",
-			HTTPCacheTTLHours:    6,
-			EnabledSources:       []string{"github", "hackernews", "huggingface", "lobsters", "producthunt"},
-			GitHubToken:          "old-gh",
-			ProductHuntToken:     "old-ph",
-		},
-		SaveConfig: func(cfg config.Config) error {
-			saved = true
-			savedConfig = cfg
-			return nil
-		},
-	})
-	model.width = 120
-	model.height = 32
-
-	model, _ = updateModelWithKey(t, model, "c")
-	x, y, ok := visibleCellContaining(model.render(), func(line string) bool {
-		return strings.Contains(line, "Product Hunt token")
-	}, "Product Hunt token")
-	if !ok {
-		t.Fatalf("settings render missing Product Hunt token:\n%s", ansi.Strip(model.render()))
-	}
-	updated, cmd := model.Update(mouseClick(x+2, y))
-	if cmd != nil {
-		t.Fatal("selecting a settings row should not run a command")
-	}
-	model = updated.(Model)
-	model, _ = updateModelWithKey(t, model, "ctrl+u")
-	for _, key := range []string{"n", "e", "w", "-", "p", "h"} {
-		model, _ = updateModelWithKey(t, model, key)
-	}
-
-	model, cmd = updateModelWithKey(t, model, "enter")
-	if cmd == nil {
-		t.Fatal("expected save settings command")
-	}
-	model = runOptionalCmd(t, model, cmd)
-	if !saved {
-		t.Fatal("settings save callback was not called")
-	}
-	if savedConfig.ProductHuntToken != "new-ph" {
-		t.Fatalf("product hunt token = %q, want new-ph", savedConfig.ProductHuntToken)
-	}
-}
-
-func TestModelSettingsTokenInputAcceptsCodeOnlyKeyPress(t *testing.T) {
-	snapshot := tuiSnapshot(false)
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
-		Config: config.Config{
-			GlamourStyle:         "dark",
-			MarkdownImagePreview: "auto",
-			HTTPCacheTTLHours:    6,
-			EnabledSources:       []string{"github", "hackernews", "huggingface", "lobsters", "producthunt"},
-			GitHubToken:          "old-gh",
-			ProductHuntToken:     "old-ph",
-		},
-	})
-	model.width = 120
-	model.height = 32
-
-	model, _ = updateModelWithKey(t, model, "c")
-	x, y, ok := visibleCellContaining(model.render(), func(line string) bool {
-		return strings.Contains(line, "GitHub token")
-	}, "GitHub token")
-	if !ok {
-		t.Fatalf("settings render missing GitHub token:\n%s", ansi.Strip(model.render()))
-	}
-	updated, _ := model.Update(mouseClick(x+2, y))
-	model = updated.(Model)
-	model, _ = updateModelWithKey(t, model, "ctrl+u")
-	updated, _ = model.Update(tea.KeyPressMsg(tea.Key{Code: 'x'}))
-	model = updated.(Model)
-
-	if model.settingsDraft.GitHubToken != "x" {
-		t.Fatalf("github token draft = %q, want x", model.settingsDraft.GitHubToken)
-	}
-}
-
-func TestModelSettingsTokenEyeButtonTogglesPlainText(t *testing.T) {
+func TestModelSettingsPasswordInputsHideExistingTokens(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
 		Config: config.Config{
@@ -579,25 +603,10 @@ func TestModelSettingsTokenEyeButtonTogglesPlainText(t *testing.T) {
 
 	model, _ = updateModelWithKey(t, model, "c")
 	if plain := ansi.Strip(model.render()); strings.Contains(plain, "old-gh") {
-		t.Fatalf("token should be hidden by default:\n%s", plain)
+		t.Fatalf("github token should be hidden by huh password input:\n%s", plain)
 	}
-	x, y, ok := visibleCellContaining(model.render(), func(line string) bool {
-		return strings.Contains(line, "GitHub token")
-	}, "👁")
-	if !ok {
-		t.Fatalf("settings render missing token eye button:\n%s", ansi.Strip(model.render()))
-	}
-
-	updated, _ := model.Update(mouseClick(x, y))
-	model = updated.(Model)
-	if plain := ansi.Strip(model.render()); !strings.Contains(plain, "old-gh") {
-		t.Fatalf("token should be visible after eye click:\n%s", plain)
-	}
-
-	updated, _ = model.Update(mouseClick(x, y))
-	model = updated.(Model)
-	if plain := ansi.Strip(model.render()); strings.Contains(plain, "old-gh") {
-		t.Fatalf("token should be hidden after second eye click:\n%s", plain)
+	if plain := ansi.Strip(model.render()); strings.Contains(plain, "old-ph") {
+		t.Fatalf("product hunt token should be hidden by huh password input:\n%s", plain)
 	}
 }
 

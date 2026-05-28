@@ -12,24 +12,30 @@ func (s *Service) ClearCache(ctx context.Context, view domain.SourceID, filter F
 }
 
 // SetSaved toggles saved state.
-func (s *Service) SetSaved(ctx context.Context, itemID string, saved bool, view domain.SourceID, filter FeedFilter) (Snapshot, error) {
-	return s.reloadAfter(ctx, view, filter, func(ctx context.Context) error {
-		return s.store.SetSaved(ctx, itemID, saved)
-	})
+func (s *Service) SetSaved(ctx context.Context, itemID string, saved bool) error {
+	if err := s.store.SetSaved(ctx, itemID, saved); err != nil {
+		return err
+	}
+	s.markRecommendationsDirty()
+	return nil
 }
 
 // SetRead toggles read state.
-func (s *Service) SetRead(ctx context.Context, itemID string, read bool, view domain.SourceID, filter FeedFilter) (Snapshot, error) {
-	return s.reloadAfter(ctx, view, filter, func(ctx context.Context) error {
-		return s.store.SetRead(ctx, itemID, read)
-	})
+func (s *Service) SetRead(ctx context.Context, itemID string, read bool) error {
+	if err := s.store.SetRead(ctx, itemID, read); err != nil {
+		return err
+	}
+	s.markRecommendationsDirty()
+	return nil
 }
 
 // SetHidden toggles hidden state.
-func (s *Service) SetHidden(ctx context.Context, itemID string, hidden bool, view domain.SourceID, filter FeedFilter) (Snapshot, error) {
-	return s.reloadAfter(ctx, view, filter, func(ctx context.Context) error {
-		return s.store.SetHidden(ctx, itemID, hidden)
-	})
+func (s *Service) SetHidden(ctx context.Context, itemID string, hidden bool) error {
+	if err := s.store.SetHidden(ctx, itemID, hidden); err != nil {
+		return err
+	}
+	s.markRecommendationsDirty()
+	return nil
 }
 
 // RecordItemEvent records an explicit local interaction for future recommendations.

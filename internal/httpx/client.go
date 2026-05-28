@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
@@ -26,7 +27,7 @@ type Client struct {
 	limiterMu sync.RWMutex
 	limiters  map[string]*rate.Limiter
 	cache     httpcache.Store
-	cacheTTL  time.Duration
+	cacheTTL  atomic.Int64
 }
 
 const (
@@ -134,7 +135,7 @@ func (c *Client) SetCacheTTL(ttl time.Duration) {
 	if ttl <= 0 {
 		return
 	}
-	c.cacheTTL = ttl
+	c.cacheTTL.Store(int64(ttl))
 }
 
 // DoGET performs a cache-aware, rate-limited GET.
@@ -421,8 +422,8 @@ func (c *Client) storeResponse(ctx context.Context, cache httpcache.Store, key, 
 }
 
 func (c *Client) resolveCacheTTL(ttl time.Duration) time.Duration {
-	if c.cacheTTL > 0 {
-		return c.cacheTTL
+	if configured := c.configuredCacheTTL(); configured > 0 {
+		return configured
 	}
 	if ttl > 0 {
 		return ttl
@@ -431,11 +432,15 @@ func (c *Client) resolveCacheTTL(ttl time.Duration) time.Duration {
 }
 
 func (c *Client) cacheEntryWithTTL(entry httpcache.Entry, ttl time.Duration) httpcache.Entry {
-	if c.cacheTTL <= 0 || entry.FetchedAt.IsZero() {
+	if c.configuredCacheTTL() <= 0 || entry.FetchedAt.IsZero() {
 		return entry
 	}
 	entry.ExpiresAt = entry.FetchedAt.Add(ttl)
 	return entry
+}
+
+func (c *Client) configuredCacheTTL() time.Duration {
+	return time.Duration(c.cacheTTL.Load())
 }
 
 // RequestKey returns the stable cache key for an HTTP request.

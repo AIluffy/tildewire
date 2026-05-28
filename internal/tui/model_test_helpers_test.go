@@ -73,6 +73,7 @@ type fakeService struct {
 	diagnosticsCalls    int
 	enabledSources      []domain.SourceID
 	tokens              map[domain.SourceID]string
+	httpCacheTTL        time.Duration
 }
 
 type fakeMarkdownImagePreviewer struct {
@@ -113,22 +114,25 @@ func (f *fakeService) SetSourceConfig(enabled []domain.SourceID, tokens map[doma
 	}
 }
 
-func (f *fakeService) SetSaved(_ context.Context, _ string, saved bool, _ domain.SourceID, filter app.FeedFilter) (app.Snapshot, error) {
+func (f *fakeService) SetHTTPCacheTTL(ttl time.Duration) {
+	f.httpCacheTTL = ttl
+}
+
+func (f *fakeService) SetSaved(_ context.Context, _ string, saved bool) error {
 	f.savedCalled = true
 	f.snapshot.Entries[0].State.Saved = saved
-	f.snapshot.Filter = filter
-	return f.snapshot, nil
+	return nil
 }
 
-func (f *fakeService) SetRead(context.Context, string, bool, domain.SourceID, app.FeedFilter) (app.Snapshot, error) {
-	return f.snapshot, nil
+func (f *fakeService) SetRead(_ context.Context, _ string, read bool) error {
+	f.snapshot.Entries[0].State.Read = read
+	return nil
 }
 
-func (f *fakeService) SetHidden(_ context.Context, _ string, hidden bool, _ domain.SourceID, filter app.FeedFilter) (app.Snapshot, error) {
+func (f *fakeService) SetHidden(_ context.Context, _ string, hidden bool) error {
 	f.lastHiddenValue = hidden
 	f.snapshot.Entries[0].State.Hidden = hidden
-	f.snapshot.Filter = filter
-	return f.snapshot, nil
+	return nil
 }
 
 func (f *fakeService) RecordItemEvent(_ context.Context, event domain.ItemEvent) error {

@@ -104,39 +104,107 @@ func (m Model) refreshProgressCmd(refreshID int) tea.Cmd {
 }
 
 func (m Model) setSavedCmd(itemID string, saved bool) tea.Cmd {
+	message := "item unsaved"
+	if saved {
+		message = "item saved"
+	}
+	if m.canPatchSavedState() {
+		return func() tea.Msg {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			err := m.service.SetSaved(ctx, itemID, saved)
+			return itemStatePatchMsg{itemID: itemID, saved: &saved, err: err, message: message}
+		}
+	}
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		snapshot, err := m.service.SetSaved(ctx, itemID, saved, m.view, m.filter)
-		message := "item unsaved"
-		if saved {
-			message = "item saved"
+		if err := m.service.SetSaved(ctx, itemID, saved); err != nil {
+			return statusMsg{message: "item state failed", err: err}
+		}
+		snapshot, err := m.service.LoadFeed(ctx, m.view, m.filter)
+		if err != nil {
+			snapshot = m.currentSnapshot()
 		}
 		return snapshotMsg{snapshot: snapshot, err: err, message: message}
 	}
 }
 
 func (m Model) setReadCmd(itemID string, read bool) tea.Cmd {
+	message := "item marked unread"
+	if read {
+		message = "item marked read"
+	}
+	if m.canPatchReadState() {
+		return func() tea.Msg {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			err := m.service.SetRead(ctx, itemID, read)
+			return itemStatePatchMsg{itemID: itemID, read: &read, err: err, message: message}
+		}
+	}
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		snapshot, err := m.service.SetRead(ctx, itemID, read, m.view, m.filter)
-		message := "item marked unread"
-		if read {
-			message = "item marked read"
+		if err := m.service.SetRead(ctx, itemID, read); err != nil {
+			return statusMsg{message: "item state failed", err: err}
+		}
+		snapshot, err := m.service.LoadFeed(ctx, m.view, m.filter)
+		if err != nil {
+			snapshot = m.currentSnapshot()
 		}
 		return snapshotMsg{snapshot: snapshot, err: err, message: message}
 	}
 }
 
+func (m Model) canPatchSavedState() bool {
+	return m.view != "" && m.view != domain.SourceAll && m.view != domain.SourceRecommend && !m.filter.SavedOnly
+}
+
+func (m Model) canPatchReadState() bool {
+	return m.view != "" && m.view != domain.SourceAll && m.view != domain.SourceRecommend && !m.filter.UnreadOnly
+}
+
+func (m Model) canPatchHiddenState() bool {
+	return m.view != "" && m.view != domain.SourceAll && m.view != domain.SourceRecommend && m.filter.IncludeHidden
+}
+
+func (m Model) currentSnapshot() app.Snapshot {
+	return app.Snapshot{
+		Entries:          m.entries,
+		Statuses:         m.statuses,
+		FetchHistory:     m.fetchHistory,
+		Rules:            m.rules,
+		DedupeCandidates: m.dedupeCandidates,
+		Counts:           m.counts,
+		View:             m.view,
+		Filter:           m.filter,
+		LoadedAt:         time.Now().UTC(),
+	}
+}
+
 func (m Model) setHiddenCmd(itemID string, hidden bool) tea.Cmd {
+	message := "item restored"
+	if hidden {
+		message = "item hidden"
+	}
+	if m.canPatchHiddenState() {
+		return func() tea.Msg {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			err := m.service.SetHidden(ctx, itemID, hidden)
+			return itemStatePatchMsg{itemID: itemID, hidden: &hidden, err: err, message: message}
+		}
+	}
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		snapshot, err := m.service.SetHidden(ctx, itemID, hidden, m.view, m.filter)
-		message := "item restored"
-		if hidden {
-			message = "item hidden"
+		if err := m.service.SetHidden(ctx, itemID, hidden); err != nil {
+			return statusMsg{message: "item state failed", err: err}
+		}
+		snapshot, err := m.service.LoadFeed(ctx, m.view, m.filter)
+		if err != nil {
+			snapshot = m.currentSnapshot()
 		}
 		return snapshotMsg{snapshot: snapshot, err: err, message: message}
 	}
@@ -300,6 +368,15 @@ type snapshotMsg struct {
 	err          error
 	message      string
 	nextRefresh  *refreshRequest
+}
+
+type itemStatePatchMsg struct {
+	itemID  string
+	saved   *bool
+	read    *bool
+	hidden  *bool
+	err     error
+	message string
 }
 
 type refreshRequest struct {

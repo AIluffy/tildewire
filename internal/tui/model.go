@@ -3,6 +3,7 @@ package tui
 import (
 	"image/color"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/spinner"
@@ -49,7 +50,11 @@ func NewModel(service FeedService, initial app.Snapshot, options ...ModelOptions
 	helpModel.ShowAll = false
 	view := initial.View
 	if view == "" {
-		view = domain.SourceAll
+		view = app.DefaultStartupView
+	}
+	filter := initial.Filter
+	if view == domain.SourceAll || view == domain.SourceRecommend {
+		filter.SourceView = ""
 	}
 	modelOptions := ModelOptions{}
 	if len(options) > 0 {
@@ -94,7 +99,7 @@ func NewModel(service FeedService, initial app.Snapshot, options ...ModelOptions
 			rules:            initial.Rules,
 			dedupeCandidates: initial.DedupeCandidates,
 			counts:           initial.Counts,
-			filter:           initial.Filter,
+			filter:           filter,
 			feedSelections:   make(map[feedSelectionKey]feedSelection),
 			activePanel:      panelFeed,
 		},
@@ -142,6 +147,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleRenderedImageMsg(msg)
 	case snapshotMsg:
 		return m.handleSnapshotMsg(msg)
+	case itemStatePatchMsg:
+		return m.handleItemStatePatchMsg(msg)
 	case refreshProgressMsg:
 		return m.handleRefreshProgressMsg(msg)
 	case spinner.TickMsg:
@@ -167,6 +174,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
+	if m.settingsOpen && m.settingsForm != nil {
+		return m.updateSettingsForm(msg)
+	}
 	if m.ruleForm != nil {
 		return m.updateRuleForm(msg)
 	}
@@ -184,6 +194,15 @@ func (m Model) handleWindowSizeMsg(msg tea.WindowSizeMsg) (Model, tea.Cmd) {
 	imageCmd := m.queueDetailImagePreviewCmds()
 	if m.images != nil {
 		imageCmd = batchCommands(imageCmd, m.images.OnResize(msg.Width, msg.Height))
+	}
+	if m.settingsOpen && m.settingsForm != nil {
+		m.resizeSettingsForm(msg.Width, msg.Height)
+		updated, cmd := m.settingsForm.Update(msg)
+		if form, ok := updated.(*huh.Form); ok {
+			m.settingsForm = form
+		}
+		m.ensureSettingsFocusedFieldVisible()
+		return m, cmd
 	}
 	if m.ruleForm != nil {
 		m.ruleForm.WithWidth(max(40, msg.Width-4)).WithHeight(max(8, msg.Height-4))
@@ -228,6 +247,53 @@ func (m Model) handleSnapshotMsg(msg snapshotMsg) (Model, tea.Cmd) {
 		return m, m.refreshWithProgressCmd(m.refreshID, msg.nextRefresh.force, msg.nextRefresh.mode)
 	}
 	return m, nil
+}
+
+func (m Model) handleItemStatePatchMsg(msg itemStatePatchMsg) (Model, tea.Cmd) {
+	m.lastError = ""
+	m.message = msg.message
+	if msg.err != nil {
+		m.lastError = msg.err.Error()
+		m.message = "item state failed"
+		return m, nil
+	}
+	m.patchEntryState(msg)
+	m.clearDetailContentCache()
+	if m.detail {
+		m.refreshDetailContentCache()
+	}
+	return m, nil
+}
+
+func (m *Model) patchEntryState(msg itemStatePatchMsg) {
+	now := time.Now().UTC()
+	for idx := range m.entries {
+		if m.entries[idx].Item.ID != msg.itemID {
+			continue
+		}
+		if m.entries[idx].State.ItemID == "" {
+			m.entries[idx].State.ItemID = msg.itemID
+		}
+		if msg.saved != nil {
+			m.entries[idx].State.Saved = *msg.saved
+			m.entries[idx].State.SavedAt = stateTimestamp(*msg.saved, now)
+		}
+		if msg.read != nil {
+			m.entries[idx].State.Read = *msg.read
+			m.entries[idx].State.ReadAt = stateTimestamp(*msg.read, now)
+		}
+		if msg.hidden != nil {
+			m.entries[idx].State.Hidden = *msg.hidden
+			m.entries[idx].State.HiddenAt = stateTimestamp(*msg.hidden, now)
+		}
+	}
+}
+
+func stateTimestamp(enabled bool, now time.Time) *time.Time {
+	if !enabled {
+		return nil
+	}
+	return &now
 }
 
 func (m Model) handleRefreshProgressMsg(msg refreshProgressMsg) (Model, tea.Cmd) {
@@ -362,11 +428,8 @@ func (m Model) handleBackgroundColorMsg(msg tea.BackgroundColorMsg) (Model, tea.
 }
 
 func (m Model) handleMouseClickMsg(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
-	if m.settingsOpen {
-		return m.handleSettingsMouseClick(msg)
-	}
-	if m.detail {
-		return m.handleDetailMouseClick(msg)
+	if overlay := m.activeMouseOverlay(); overlay != overlayNone {
+		return m.handleOverlayMouseClick(overlay, msg)
 	}
 	if m.mainPanelsVisible() {
 		return m.handleMouseClick(msg)
@@ -375,6 +438,9 @@ func (m Model) handleMouseClickMsg(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleMouseWheelMsg(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
+	if m.settingsOpen {
+		return m.handleSettingsMouseWheel(msg)
+	}
 	if m.detail {
 		return m.handleDetailMouseWheel(msg)
 	}

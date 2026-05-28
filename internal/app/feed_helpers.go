@@ -26,11 +26,12 @@ func (s *Service) sourceTabCounts(ctx context.Context) (map[domain.SourceID]int,
 	if err != nil {
 		return nil, err
 	}
-	counts := make(map[domain.SourceID]int, len(s.sources)+2)
-	for _, source := range s.sources {
+	sources := s.sourceIDsSnapshot()
+	counts := make(map[domain.SourceID]int, len(sources)+2)
+	for _, source := range sources {
 		counts[source] = storedCounts[source]
 	}
-	for _, source := range s.sources {
+	for _, source := range sources {
 		viewKeys := s.primarySourceViewKeys(source)
 		if len(viewKeys) == 0 {
 			continue
@@ -46,7 +47,7 @@ func (s *Service) sourceTabCounts(ctx context.Context) (map[domain.SourceID]int,
 		return nil, err
 	}
 	counts[domain.SourceRecommend] = capRecommendCount(recommendCount)
-	counts[domain.SourceAll] = sumSourceCounts(counts, s.sources)
+	counts[domain.SourceAll] = sumSourceCounts(counts, sources)
 	return counts, nil
 }
 
@@ -140,6 +141,12 @@ func (s *Service) filterFetchHistoryForEnabledSources(events []domain.FetchEvent
 }
 
 func (s *Service) sourceEnabled(source domain.SourceID) bool {
+	s.runtimeMu.RLock()
+	defer s.runtimeMu.RUnlock()
+	return s.sourceEnabledLocked(source)
+}
+
+func (s *Service) sourceEnabledLocked(source domain.SourceID) bool {
 	if source == "" || source == domain.SourceAll || source == domain.SourceRecommend {
 		return true
 	}
@@ -152,6 +159,12 @@ func (s *Service) sourceEnabled(source domain.SourceID) bool {
 		return true
 	}
 	return s.enabled[source]
+}
+
+func (s *Service) sourceIDsSnapshot() []domain.SourceID {
+	s.runtimeMu.RLock()
+	defer s.runtimeMu.RUnlock()
+	return append([]domain.SourceID(nil), s.sources...)
 }
 
 func sumSourceCounts(counts map[domain.SourceID]int, sources []domain.SourceID) int {

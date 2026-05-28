@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -31,6 +32,7 @@ type GitHubTrendingAdapter struct {
 	BaseURL    string
 	APIBaseURL string
 	Token      string
+	tokenMu    sync.RWMutex
 }
 
 // NewGitHubTrendingAdapter creates the GitHub Trending source adapter.
@@ -44,16 +46,18 @@ func NewGitHubTrendingAdapter(tokens ...string) *GitHubTrendingAdapter {
 
 // SetToken updates the token used for GitHub REST detail requests.
 func (a *GitHubTrendingAdapter) SetToken(token string) {
+	a.tokenMu.Lock()
+	defer a.tokenMu.Unlock()
 	a.Token = strings.TrimSpace(token)
 }
 
 // Source returns the adapter source id.
-func (a GitHubTrendingAdapter) Source() domain.SourceID {
+func (a *GitHubTrendingAdapter) Source() domain.SourceID {
 	return domain.SourceGitHub
 }
 
 // DefaultScopes returns the GitHub scopes refreshed by the MVP.
-func (a GitHubTrendingAdapter) DefaultScopes() []domain.FetchScope {
+func (a *GitHubTrendingAdapter) DefaultScopes() []domain.FetchScope {
 	return []domain.FetchScope{
 		{Source: domain.SourceGitHub, View: "trending", Period: "daily", Limit: 25},
 		{Source: domain.SourceGitHub, View: "trending", Period: "weekly", Limit: 25},
@@ -65,7 +69,7 @@ func (a GitHubTrendingAdapter) DefaultScopes() []domain.FetchScope {
 }
 
 // Fetch downloads one GitHub Trending HTML page.
-func (a GitHubTrendingAdapter) Fetch(ctx context.Context, scope domain.FetchScope, client httpx.Requester) (*domain.FetchResult, error) {
+func (a *GitHubTrendingAdapter) Fetch(ctx context.Context, scope domain.FetchScope, client httpx.Requester) (*domain.FetchResult, error) {
 	scope = normalize.NormalizeGitHubScope(scope)
 	resp, err := client.DoGET(ctx, httpx.GetOptions{
 		Source:       string(domain.SourceGitHub),
@@ -89,7 +93,7 @@ func (a GitHubTrendingAdapter) Fetch(ctx context.Context, scope domain.FetchScop
 }
 
 // Normalize converts GitHub Trending HTML into FeedItems.
-func (a GitHubTrendingAdapter) Normalize(_ context.Context, scope domain.FetchScope, raw *domain.FetchResult) ([]domain.FeedItem, error) {
+func (a *GitHubTrendingAdapter) Normalize(_ context.Context, scope domain.FetchScope, raw *domain.FetchResult) ([]domain.FeedItem, error) {
 	if raw == nil {
 		return nil, fmt.Errorf("github raw response is nil")
 	}
@@ -105,7 +109,7 @@ func (a GitHubTrendingAdapter) Normalize(_ context.Context, scope domain.FetchSc
 }
 
 // CachePolicy returns GitHub Trending TTLs.
-func (a GitHubTrendingAdapter) CachePolicy(scope domain.FetchScope) domain.CachePolicy {
+func (a *GitHubTrendingAdapter) CachePolicy(scope domain.FetchScope) domain.CachePolicy {
 	period := strings.ToLower(strings.TrimSpace(scope.Period))
 	if period == "weekly" || period == "monthly" {
 		return domain.CachePolicy{TTL: 2 * time.Hour}
@@ -114,17 +118,18 @@ func (a GitHubTrendingAdapter) CachePolicy(scope domain.FetchScope) domain.Cache
 }
 
 // Detail loads a GitHub README preview for repository items.
-func (a GitHubTrendingAdapter) Detail(ctx context.Context, entry domain.FeedEntry, client httpx.Getter) (domain.ItemDetail, error) {
+func (a *GitHubTrendingAdapter) Detail(ctx context.Context, entry domain.FeedEntry, client httpx.Getter) (domain.ItemDetail, error) {
 	repo := normalize.NormalizeRepo(entry.Item.Refs.Repo)
 	if repo == "" {
 		return domain.ItemDetail{}, fmt.Errorf("github repo is missing")
 	}
+	token := a.token()
 	resp, err := client.DoGET(ctx, httpx.GetOptions{
 		Source:          string(domain.SourceGitHub),
 		RateLimitBucket: githubAPIRateLimitBucket,
 		URL:             a.readmeURL(repo),
 		TTL:             6 * time.Hour,
-		BearerToken:     a.Token,
+		BearerToken:     token,
 	})
 	if err != nil {
 		return domain.ItemDetail{}, err
@@ -151,7 +156,7 @@ func (a GitHubTrendingAdapter) Detail(ctx context.Context, entry domain.FeedEntr
 	}, nil
 }
 
-func (a GitHubTrendingAdapter) trendingURL(scope domain.FetchScope) string {
+func (a *GitHubTrendingAdapter) trendingURL(scope domain.FetchScope) string {
 	scope = normalize.NormalizeGitHubScope(scope)
 	path := "/trending"
 	if scope.Language != "" {
@@ -171,22 +176,28 @@ func (a GitHubTrendingAdapter) trendingURL(scope domain.FetchScope) string {
 	return u.String()
 }
 
-func (a GitHubTrendingAdapter) baseURL() string {
+func (a *GitHubTrendingAdapter) baseURL() string {
 	if strings.TrimSpace(a.BaseURL) == "" {
 		return githubTrendingBaseURL
 	}
 	return strings.TrimRight(a.BaseURL, "/")
 }
 
-func (a GitHubTrendingAdapter) apiBaseURL() string {
+func (a *GitHubTrendingAdapter) apiBaseURL() string {
 	if strings.TrimSpace(a.APIBaseURL) == "" {
 		return githubAPIBaseURL
 	}
 	return strings.TrimRight(a.APIBaseURL, "/")
 }
 
-func (a GitHubTrendingAdapter) readmeURL(repo string) string {
+func (a *GitHubTrendingAdapter) readmeURL(repo string) string {
 	return a.apiBaseURL() + "/repos/" + repo + "/readme"
+}
+
+func (a *GitHubTrendingAdapter) token() string {
+	a.tokenMu.RLock()
+	defer a.tokenMu.RUnlock()
+	return strings.TrimSpace(a.Token)
 }
 
 type githubReadmePayload struct {

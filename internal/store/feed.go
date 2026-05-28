@@ -317,10 +317,71 @@ func itemSearchContent(item domain.FeedItem) string {
 		item.Refs.Repo,
 		item.Refs.ArxivID,
 		item.Refs.PaperID,
-		string(item.Metadata),
 	}
+	parts = append(parts, searchableMetadataText(item.Metadata)...)
 	parts = append(parts, item.Tags...)
 	return strings.Join(parts, " ")
+}
+
+func searchableMetadataText(raw json.RawMessage) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil
+	}
+	var parts []string
+	collectSearchableMetadata(partsAppender{parts: &parts}, "", false, value)
+	return parts
+}
+
+type partsAppender struct {
+	parts *[]string
+}
+
+func (a partsAppender) append(value string) {
+	value = strings.TrimSpace(value)
+	if value != "" {
+		*a.parts = append(*a.parts, value)
+	}
+}
+
+func collectSearchableMetadata(appender partsAppender, key string, searchable bool, value any) {
+	searchable = searchable || searchableMetadataKey(key)
+	switch value := value.(type) {
+	case string:
+		if searchable {
+			appender.append(value)
+		}
+	case []any:
+		for _, item := range value {
+			collectSearchableMetadata(appender, "", searchable, item)
+		}
+	case map[string]any:
+		for childKey, childValue := range value {
+			collectSearchableMetadata(appender, childKey, searchable, childValue)
+		}
+	}
+}
+
+func searchableMetadataKey(key string) bool {
+	switch normalizedMetadataKey(key) {
+	case "title", "name", "summary", "description", "tagline", "repo", "language", "category", "author", "organization", "keywords", "tags", "topics", "labels":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizedMetadataKey(key string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(key) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 func itemDedupeText(item domain.FeedItem) string {

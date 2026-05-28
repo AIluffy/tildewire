@@ -17,6 +17,8 @@ type Service struct {
 	sources             []domain.SourceID
 	enabled             map[domain.SourceID]bool
 	recommendationDirty bool
+	recommendationGen   uint64
+	runtimeMu           sync.RWMutex
 	storeMu             sync.Mutex
 }
 
@@ -73,14 +75,23 @@ func NewService(store FeedStore, client httpx.Requester, adapters []SourceAdapte
 		sources:             countSources(ordered, enabled),
 		enabled:             enabled,
 		recommendationDirty: true,
+		recommendationGen:   1,
 	}
 }
 
 // SetSourceConfig applies source visibility and token settings without rebuilding the service.
 func (s *Service) SetSourceConfig(enabled []domain.SourceID, tokens map[domain.SourceID]string) {
-	s.enabled = enabledSourceSet(enabled)
-	s.sources = countSources(s.adapters, s.enabled)
-	s.markRecommendationsDirty()
+	nextEnabled := enabledSourceSet(enabled)
+	nextSources := countSources(s.adapters, nextEnabled)
+	s.runtimeMu.Lock()
+	defer s.runtimeMu.Unlock()
+	s.setAdapterTokens(tokens)
+	s.enabled = nextEnabled
+	s.sources = nextSources
+	s.markRecommendationsDirtyLocked()
+}
+
+func (s *Service) setAdapterTokens(tokens map[domain.SourceID]string) {
 	for _, adapter := range s.adapters {
 		setter, ok := adapter.(TokenAdapter)
 		if !ok {
@@ -247,16 +258,44 @@ func (s *Service) listFeedForView(ctx context.Context, view domain.SourceID, que
 }
 
 func (s *Service) markRecommendationsDirty() {
+	s.runtimeMu.Lock()
+	defer s.runtimeMu.Unlock()
+	s.markRecommendationsDirtyLocked()
+}
+
+func (s *Service) markRecommendationsDirtyLocked() {
 	s.recommendationDirty = true
+	s.recommendationGen++
 }
 
 func (s *Service) ensureRecommendations(ctx context.Context, view domain.SourceID) error {
-	if !s.recommendationDirty && view != domain.SourceRecommend {
+	dirty, generation := s.recommendationState(view)
+	if !dirty {
 		return nil
 	}
 	if err := s.recomputeRecommendations(ctx); err != nil {
 		return err
 	}
-	s.recommendationDirty = false
+	s.markRecommendationsClean(generation)
 	return nil
+}
+
+func (s *Service) markRecommendationsClean(generation uint64) {
+	s.runtimeMu.Lock()
+	defer s.runtimeMu.Unlock()
+	if s.recommendationGen == generation {
+		s.recommendationDirty = false
+	}
+}
+
+func (s *Service) recommendationState(view domain.SourceID) (bool, uint64) {
+	s.runtimeMu.RLock()
+	defer s.runtimeMu.RUnlock()
+	return s.recommendationDirty || view == domain.SourceRecommend, s.recommendationGen
+}
+
+func (s *Service) recommendationsDirty(view domain.SourceID) bool {
+	s.runtimeMu.RLock()
+	defer s.runtimeMu.RUnlock()
+	return s.recommendationDirty || view == domain.SourceRecommend
 }

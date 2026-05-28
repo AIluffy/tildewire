@@ -96,10 +96,8 @@ type overlayState struct {
 }
 
 type settingsState struct {
-	settingsOpen                 bool
-	settingsCursor               int
-	settingsSourceCursor         int
-	settingsShowGitHubToken      bool
-	settingsShowProductHuntToken bool
-	settingsDraft                settingsDraft
+	settingsOpen         bool
+	settingsForm         *huh.Form
+	settingsDraft        settingsDraft
+	settingsScrollOffset int
 }

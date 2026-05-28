@@ -17,17 +17,7 @@ func (s *Service) Refresh(ctx context.Context, view domain.SourceID, filter Feed
 	filter = normalizeViewFilter(view, filter)
 	options.Mode = normalizeRefreshMode(options.Mode)
 	var refreshErrs []error
-	jobs := make([]refreshJob, 0, len(s.adapters))
-	for _, adapter := range s.adapters {
-		if !s.sourceEnabled(adapter.Source()) {
-			continue
-		}
-		scopes := refreshScopes(adapter, view, filter, options.Mode)
-		if len(scopes) == 0 {
-			continue
-		}
-		jobs = append(jobs, refreshJob{adapter: adapter, scopes: scopes})
-	}
+	jobs := s.refreshJobs(view, filter, options.Mode)
 	for _, err := range s.refreshAdapters(ctx, jobs, options) {
 		if err != nil {
 			refreshErrs = append(refreshErrs, err)
@@ -44,6 +34,23 @@ func (s *Service) Refresh(ctx context.Context, view domain.SourceID, filter Feed
 type refreshJob struct {
 	adapter SourceAdapter
 	scopes  []domain.FetchScope
+}
+
+func (s *Service) refreshJobs(view domain.SourceID, filter FeedFilter, mode RefreshMode) []refreshJob {
+	s.runtimeMu.RLock()
+	defer s.runtimeMu.RUnlock()
+	jobs := make([]refreshJob, 0, len(s.adapters))
+	for _, adapter := range s.adapters {
+		if !s.sourceEnabledLocked(adapter.Source()) {
+			continue
+		}
+		scopes := refreshScopes(adapter, view, filter, mode)
+		if len(scopes) == 0 {
+			continue
+		}
+		jobs = append(jobs, refreshJob{adapter: adapter, scopes: scopes})
+	}
+	return jobs
 }
 
 func (s *Service) refreshAdapters(ctx context.Context, jobs []refreshJob, options RefreshOptions) []error {
@@ -69,20 +76,18 @@ func (s *Service) refreshAdapter(ctx context.Context, adapter SourceAdapter, sco
 	if len(scopes) == 0 {
 		return nil
 	}
-	if authAdapter, ok := adapter.(OptionalAuthAdapter); ok {
-		if required, reason := authAdapter.AuthRequired(); required {
-			var errs []error
-			if err := s.updateSourceStatus(ctx, source, domain.SourceStatusAuthRequired, reason); err != nil {
+	if required, reason := s.adapterAuthRequired(adapter); required {
+		var errs []error
+		if err := s.updateSourceStatus(ctx, source, domain.SourceStatusAuthRequired, reason); err != nil {
+			errs = append(errs, err)
+		}
+		for _, scope := range scopes {
+			startedAt := time.Now().UTC()
+			if err := s.recordFetchEvent(ctx, source, scope, domain.SourceStatusAuthRequired, startedAt, 0, false, "", reason); err != nil {
 				errs = append(errs, err)
 			}
-			for _, scope := range scopes {
-				startedAt := time.Now().UTC()
-				if err := s.recordFetchEvent(ctx, source, scope, domain.SourceStatusAuthRequired, startedAt, 0, false, "", reason); err != nil {
-					errs = append(errs, err)
-				}
-			}
-			return errors.Join(errs...)
 		}
+		return errors.Join(errs...)
 	}
 	if err := s.updateSourceStatus(ctx, source, domain.SourceStatusRefreshing, ""); err != nil {
 		return err
@@ -130,6 +135,14 @@ func (s *Service) refreshAdapter(ctx context.Context, adapter SourceAdapter, sco
 		}
 	}
 	return errors.Join(errs...)
+}
+
+func (s *Service) adapterAuthRequired(adapter SourceAdapter) (bool, string) {
+	authAdapter, ok := adapter.(OptionalAuthAdapter)
+	if !ok {
+		return false, ""
+	}
+	return authAdapter.AuthRequired()
 }
 
 func (s *Service) recordFetchEvent(ctx context.Context, source domain.SourceID, scope domain.FetchScope, status domain.SourceStatus, startedAt time.Time, itemCount int, stale bool, staleReason, errText string) error {

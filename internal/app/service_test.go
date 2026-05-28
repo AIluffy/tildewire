@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -50,6 +51,124 @@ func TestRefreshPassesForceAndMarksStale(t *testing.T) {
 	}
 	if got := findStatus(snapshot.Statuses, domain.SourceHackerNews); got != domain.SourceStatusStale {
 		t.Fatalf("status = %s, want STALE", got)
+	}
+}
+
+func TestServiceRuntimeConfigConcurrentAccess(t *testing.T) {
+	github := &fakeAdapter{source: domain.SourceGitHub}
+	hn := &fakeAdapter{source: domain.SourceHackerNews}
+	service := NewService(nil, nil, []SourceAdapter{github, hn})
+
+	var wg sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				if (idx+j)%2 == 0 {
+					service.SetSourceConfig([]domain.SourceID{domain.SourceGitHub}, map[domain.SourceID]string{
+						domain.SourceGitHub: fmt.Sprintf("gh-%d-%d", idx, j),
+					})
+				} else {
+					service.SetSourceConfig([]domain.SourceID{domain.SourceHackerNews}, nil)
+				}
+			}
+		}(i)
+	}
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				_ = service.sourceEnabled(domain.SourceGitHub)
+				_ = service.sourceEnabled(domain.SourceHackerNews)
+				_ = service.sourceIDsSnapshot()
+				service.markRecommendationsDirty()
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestSetSourceConfigDoesNotWaitForInFlightFetch(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+
+	started := make(chan domain.SourceID, 1)
+	release := make(chan struct{})
+	adapter := &fakeAdapter{
+		source:       domain.SourceHackerNews,
+		scopes:       []domain.FetchScope{{Source: domain.SourceHackerNews, View: "top", Limit: 10}},
+		startSignal:  started,
+		releaseFetch: release,
+		items:        []domain.FeedItem{appTestSourceItem("hn-top", "hackernews:top", "HN top", domain.SourceHackerNews, 1, time.Now().UTC())},
+	}
+	service := NewService(db, httpx.New(time.Second), []SourceAdapter{adapter})
+
+	refreshDone := make(chan error, 1)
+	go func() {
+		_, err := service.Refresh(ctx, domain.SourceHackerNews, FeedFilter{}, RefreshOptions{Mode: RefreshModeVisible})
+		refreshDone <- err
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		close(release)
+		t.Fatal("refresh did not start fetch")
+	}
+
+	configDone := make(chan struct{})
+	go func() {
+		service.SetSourceConfig([]domain.SourceID{domain.SourceHackerNews}, nil)
+		close(configDone)
+	}()
+	select {
+	case <-configDone:
+	case <-time.After(200 * time.Millisecond):
+		close(release)
+		<-refreshDone
+		t.Fatal("SetSourceConfig blocked behind in-flight fetch")
+	}
+
+	close(release)
+	if err := <-refreshDone; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestEnsureRecommendationsKeepsDirtyMarkFromConcurrentMutation(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+
+	replaceStarted := make(chan struct{})
+	releaseReplace := make(chan struct{})
+	blockingStore := &blockingRecommendationStore{
+		Store:          db,
+		started:        replaceStarted,
+		releaseReplace: releaseReplace,
+	}
+	service := NewService(blockingStore, httpx.New(time.Second), nil)
+
+	recomputeDone := make(chan error, 1)
+	go func() {
+		recomputeDone <- service.ensureRecommendations(ctx, domain.SourceAll)
+	}()
+	select {
+	case <-replaceStarted:
+	case <-time.After(time.Second):
+		close(releaseReplace)
+		t.Fatal("recommendation recompute did not reach score replacement")
+	}
+
+	service.markRecommendationsDirty()
+	close(releaseReplace)
+	if err := <-recomputeDone; err != nil {
+		t.Fatal(err)
+	}
+	if !service.recommendationsDirty(domain.SourceAll) {
+		t.Fatal("concurrent recommendation dirty mark was cleared by finishing recompute")
 	}
 }
 
@@ -926,7 +1045,10 @@ func TestRecommendFeedRecomputesAfterRuleAndStateChanges(t *testing.T) {
 	if len(snapshot.Entries) != 1 || snapshot.Entries[0].Item.ID != item.ID {
 		t.Fatalf("recommend after boost = %+v, want sqlite item", snapshot.Entries)
 	}
-	snapshot, err = service.SetHidden(ctx, item.ID, true, domain.SourceRecommend, FeedFilter{IncludeHidden: true})
+	if err := service.SetHidden(ctx, item.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err = service.LoadFeed(ctx, domain.SourceRecommend, FeedFilter{IncludeHidden: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2247,6 +2369,29 @@ func (f *fakeAdapter) SetToken(token string) {
 func (f *fakeAdapter) Detail(context.Context, domain.FeedEntry, httpx.Getter) (domain.ItemDetail, error) {
 	f.detailCalls++
 	return f.detail, f.detailErr
+}
+
+type blockingRecommendationStore struct {
+	*store.Store
+	replaceStarted sync.Once
+	started        chan struct{}
+	releaseReplace <-chan struct{}
+}
+
+func (s *blockingRecommendationStore) ReplaceRecommendationScores(ctx context.Context, scores []domain.RecommendationScore) error {
+	if s.started != nil {
+		s.replaceStarted.Do(func() {
+			close(s.started)
+		})
+	}
+	if s.releaseReplace != nil {
+		select {
+		case <-s.releaseReplace:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return s.Store.ReplaceRecommendationScores(ctx, scores)
 }
 
 func openAppTestStore(t *testing.T) *store.Store {

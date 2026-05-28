@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"time"
 
 	"github.com/AIluffy/tildewire/internal/app"
 	"github.com/AIluffy/tildewire/internal/domain"
@@ -14,9 +15,9 @@ type feedLoader interface {
 }
 
 type itemMutator interface {
-	SetSaved(context.Context, string, bool, domain.SourceID, app.FeedFilter) (app.Snapshot, error)
-	SetRead(context.Context, string, bool, domain.SourceID, app.FeedFilter) (app.Snapshot, error)
-	SetHidden(context.Context, string, bool, domain.SourceID, app.FeedFilter) (app.Snapshot, error)
+	SetSaved(context.Context, string, bool) error
+	SetRead(context.Context, string, bool) error
+	SetHidden(context.Context, string, bool) error
 	RecordItemEvent(context.Context, domain.ItemEvent) error
 }
 
@@ -45,6 +46,7 @@ type recommendDiagnosticsService interface {
 
 type runtimeConfigService interface {
 	SetSourceConfig([]domain.SourceID, map[domain.SourceID]string)
+	SetHTTPCacheTTL(time.Duration)
 }
 
 // FeedService is the application surface used by the TUI.

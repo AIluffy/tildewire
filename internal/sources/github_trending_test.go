@@ -3,9 +3,11 @@ package sources
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -325,6 +327,51 @@ func TestGitHubTrendingDetailUsesTokenForReadmeRequest(t *testing.T) {
 	if gotAuth != "Bearer github-token" {
 		t.Fatalf("authorization header = %q, want bearer token", gotAuth)
 	}
+}
+
+func TestGitHubTrendingTokenConcurrentWithDetail(t *testing.T) {
+	payload := `{"encoding":"base64","content":"cmVhZG1l","html_url":"https://github.com/owner/repo#readme"}`
+	adapter := GitHubTrendingAdapter{Token: "initial"}
+	entry := domain.FeedEntry{
+		Item: domain.FeedItem{
+			ID:    "repo-1",
+			Title: "owner/repo",
+			Refs:  domain.Refs{Repo: "owner/repo"},
+		},
+		Sources: []domain.ItemSource{{Source: domain.SourceGitHub, SourceIDRaw: "owner/repo"}},
+	}
+	client := getterFunc(func(context.Context, httpx.GetOptions) (httpx.Response, error) {
+		return httpx.Response{Body: []byte(payload), FetchedAt: time.Now().UTC()}, nil
+	})
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			for j := 0; j < 25; j++ {
+				adapter.SetToken(fmt.Sprintf("token-%d-%d", idx, j))
+			}
+		}(i)
+	}
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 25; j++ {
+				if _, err := adapter.Detail(context.Background(), entry, client); err != nil {
+					t.Errorf("Detail: %v", err)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+type getterFunc func(context.Context, httpx.GetOptions) (httpx.Response, error)
+
+func (f getterFunc) DoGET(ctx context.Context, options httpx.GetOptions) (httpx.Response, error) {
+	return f(ctx, options)
 }
 
 func TestGitHubTrendingDetailUsesSeparateAPIRateLimitBucket(t *testing.T) {

@@ -83,7 +83,7 @@ func Run(programName, version string, args []string, output io.Writer) error {
 		},
 	)
 	service.SetSourceConfig(configuredEnabledSources(cfg.EnabledSources), sourceTokens(cfg))
-	initial, err := service.LoadFeed(ctx, domain.SourceAll, app.FeedFilter{})
+	initial, err := service.LoadFeed(ctx, app.DefaultStartupView, app.FeedFilter{})
 	if err != nil {
 		return err
 	}

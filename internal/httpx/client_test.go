@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -68,6 +69,46 @@ func TestDoGETUsesConfiguredCacheTTL(t *testing.T) {
 	if got != 6*time.Hour {
 		t.Fatalf("cache ttl = %s, want 6h", got)
 	}
+}
+
+func TestSetCacheTTLConcurrentWithDoGET(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("live"))
+	}))
+	defer server.Close()
+
+	client := New(time.Second)
+	client.client.RetryMax = 0
+
+	var wg sync.WaitGroup
+	for i := 0; i < 24; i++ {
+		ttl := time.Duration(i+1) * time.Minute
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			client.SetCacheTTL(ttl)
+		}()
+	}
+	for i := 0; i < 24; i++ {
+		url := fmt.Sprintf("%s?request=%d", server.URL, i)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resp, err := client.DoGET(context.Background(), GetOptions{
+				Source: "test",
+				URL:    url,
+				TTL:    time.Minute,
+			})
+			if err != nil {
+				t.Errorf("DoGET: %v", err)
+				return
+			}
+			if string(resp.Body) != "live" {
+				t.Errorf("body = %q, want live", resp.Body)
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func TestDoGETAppliesConfiguredCacheTTLToExistingCache(t *testing.T) {

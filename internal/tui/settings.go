@@ -4,12 +4,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/x/ansi"
+	"charm.land/huh/v2"
 
 	"github.com/AIluffy/tildewire/internal/app"
 	"github.com/AIluffy/tildewire/internal/config"
@@ -27,84 +26,9 @@ type settingsDraft struct {
 	ProductHuntToken     string
 }
 
-type httpCacheTTLSetter interface {
-	SetHTTPCacheTTL(time.Duration)
-}
-
-type settingsField int
-
-const (
-	settingsFieldNone settingsField = iota
-	settingsFieldTheme
-	settingsFieldMarkdownImagePreview
-	settingsFieldVisibleSources
-	settingsFieldGitHubToken
-	settingsFieldProductHuntToken
-	settingsFieldHTTPCacheTTL
-	settingsFieldAccessibleForms
-	settingsFieldSave
-)
-
-type settingsAction int
-
-const (
-	settingsActionNone settingsAction = iota
-	settingsActionSave
-	settingsActionCancel
-	settingsActionToggleSecret
-)
-
 type settingsOption struct {
 	Label string
 	Value string
-}
-
-type settingsHitSpan struct {
-	start  int
-	end    int
-	field  settingsField
-	value  string
-	action settingsAction
-}
-
-type settingsRenderRow struct {
-	field settingsField
-	line  string
-	spans []settingsHitSpan
-}
-
-type settingsHit struct {
-	field  settingsField
-	value  string
-	action settingsAction
-}
-
-type settingsPanelBounds struct {
-	x             int
-	y             int
-	width         int
-	height        int
-	contentX      int
-	contentY      int
-	contentWidth  int
-	contentHeight int
-}
-
-type settingsLineBuilder struct {
-	line  string
-	cell  int
-	spans []settingsHitSpan
-}
-
-var settingsFocusableFields = []settingsField{
-	settingsFieldTheme,
-	settingsFieldMarkdownImagePreview,
-	settingsFieldVisibleSources,
-	settingsFieldGitHubToken,
-	settingsFieldProductHuntToken,
-	settingsFieldHTTPCacheTTL,
-	settingsFieldAccessibleForms,
-	settingsFieldSave,
 }
 
 var markdownImagePreviewSettingsOptions = []settingsOption{
@@ -117,66 +41,63 @@ var markdownImagePreviewSettingsOptions = []settingsOption{
 }
 
 func (m Model) handleSettingsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.keys.Back):
+	if key.Matches(msg, m.keys.Back) {
 		m.closeSettings("settings cancelled")
 		return m, nil
-	case key.Matches(msg, m.keys.Up):
-		m.moveSettingsCursor(-1)
-		return m, nil
-	case key.Matches(msg, m.keys.Down):
-		m.moveSettingsCursor(1)
-		return m, nil
-	case key.Matches(msg, m.keys.FocusLeft):
-		m.changeSelectedSetting(-1)
-		return m, nil
-	case key.Matches(msg, m.keys.FocusRight):
-		m.changeSelectedSetting(1)
-		return m, nil
-	case key.Matches(msg, m.keys.OpenDetail):
-		return m.applySettingsState(nil)
 	}
-
 	switch msg.String() {
-	case "space":
-		return m.activateSelectedSetting()
-	case "ctrl+u":
-		m.clearSelectedSettingText()
+	case "pgup":
+		m.scrollSettings(-m.settingsPageSize())
 		return m, nil
-	case "backspace", "ctrl+h":
-		m.deleteSelectedSettingRune()
+	case "pgdown":
+		m.scrollSettings(m.settingsPageSize())
 		return m, nil
 	}
-	if text := settingsInputText(msg); text != "" {
-		m.appendSelectedSettingText(text)
+	return m.updateSettingsForm(msg)
+}
+
+func (m Model) handleSettingsMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
+	if msg.Mouse().Button != tea.MouseLeft {
+		return m, nil
+	}
+	return m.updateSettingsForm(msg)
+}
+
+func (m Model) handleSettingsMouseWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
+	switch msg.Mouse().Button {
+	case tea.MouseWheelUp:
+		m.scrollSettings(-3)
+	case tea.MouseWheelDown:
+		m.scrollSettings(3)
 	}
 	return m, nil
 }
 
-func (m Model) handleSettingsMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
-	mouse := msg.Mouse()
-	if mouse.Button != tea.MouseLeft {
+func (m Model) updateSettingsForm(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.settingsForm == nil {
 		return m, nil
 	}
-	hit, ok := m.settingsHitAt(mouse.X, mouse.Y)
-	if !ok {
-		return m, nil
+	updated, cmd := m.settingsForm.Update(msg)
+	if form, ok := updated.(*huh.Form); ok {
+		m.settingsForm = form
 	}
-	if hit.field != settingsFieldNone {
-		m.focusSettingsField(hit.field)
+	m.ensureSettingsFocusedFieldVisible()
+	return m.applySettingsFormState(cmd)
+}
+
+func (m Model) applySettingsFormState(cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	if m.settingsForm == nil {
+		return m, cmd
 	}
-	if hit.value != "" {
-		m.applySettingsValue(hit.field, hit.value)
-	}
-	switch hit.action {
-	case settingsActionSave:
-		return m.applySettingsState(nil)
-	case settingsActionCancel:
+	switch m.settingsForm.State {
+	case huh.StateCompleted:
+		return m.applySettingsState(cmd)
+	case huh.StateAborted:
 		m.closeSettings("settings cancelled")
-	case settingsActionToggleSecret:
-		m.toggleSettingsSecretVisibility(hit.field)
+		return m, cmd
+	default:
+		return m, cmd
 	}
-	return m, nil
 }
 
 func (m Model) applySettingsState(cmd tea.Cmd) (tea.Model, tea.Cmd) {
@@ -200,9 +121,7 @@ func (m Model) applySettingsState(cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	next.EnabledSources = enabledSources
 	next.GitHubToken = strings.TrimSpace(m.settingsDraft.GitHubToken)
 	next.ProductHuntToken = strings.TrimSpace(m.settingsDraft.ProductHuntToken)
-	if setter, ok := m.service.(httpCacheTTLSetter); ok {
-		setter.SetHTTPCacheTTL(next.HTTPCacheTTL())
-	}
+	m.service.SetHTTPCacheTTL(next.HTTPCacheTTL())
 	m.service.SetSourceConfig(sourceIDsFromStrings(next.EnabledSources), sourceTokensFromConfig(next))
 	m.config = next
 	m.styles = styles
@@ -213,6 +132,7 @@ func (m Model) applySettingsState(cmd tea.Cmd) (tea.Model, tea.Cmd) {
 		m.setSource(domain.SourceAll)
 	}
 	m.settingsOpen = false
+	m.settingsForm = nil
 	m.message = "settings saved"
 	return m, batchCommands(cmd, m.saveSettingsCmd(next), m.loadCmd())
 }
@@ -233,548 +153,208 @@ func (m *Model) openSettingsForm() {
 	}
 	m.settingsOpen = true
 	m.recommendDiagnosticsOpen = false
-	m.settingsShowGitHubToken = false
-	m.settingsShowProductHuntToken = false
-	if m.settingsCursor < 0 || m.settingsCursor >= len(settingsFocusableFields) {
-		m.settingsCursor = 0
-	}
-	m.clampSettingsSourceCursor()
+	m.settingsScrollOffset = 0
+	m.settingsForm = m.newSettingsForm()
+	_ = m.settingsForm.Init()
 }
 
 func (m *Model) closeSettings(message string) {
 	m.settingsOpen = false
+	m.settingsForm = nil
+	m.settingsScrollOffset = 0
 	m.message = message
 }
 
-func (m *Model) moveSettingsCursor(delta int) {
-	if len(settingsFocusableFields) == 0 {
-		m.settingsCursor = 0
-		return
-	}
-	m.settingsCursor = clamp(m.settingsCursor+delta, 0, len(settingsFocusableFields)-1)
-}
-
-func (m Model) selectedSettingsField() settingsField {
-	if m.settingsCursor < 0 || m.settingsCursor >= len(settingsFocusableFields) {
-		return settingsFocusableFields[0]
-	}
-	return settingsFocusableFields[m.settingsCursor]
-}
-
-func (m *Model) focusSettingsField(field settingsField) {
-	for idx, candidate := range settingsFocusableFields {
-		if candidate == field {
-			m.settingsCursor = idx
-			return
-		}
-	}
-}
-
-func (m *Model) changeSelectedSetting(delta int) {
-	switch m.selectedSettingsField() {
-	case settingsFieldTheme:
-		m.settingsDraft.Theme = cycleSettingsOption(themeSettingsOptions(), m.settingsDraft.Theme, delta)
-	case settingsFieldMarkdownImagePreview:
-		m.settingsDraft.MarkdownImagePreview = cycleSettingsOption(markdownImagePreviewSettingsOptions, m.settingsDraft.MarkdownImagePreview, delta)
-	case settingsFieldVisibleSources:
-		m.settingsSourceCursor = clamp(m.settingsSourceCursor+delta, 0, len(settingsSourceOptions())-1)
-	case settingsFieldHTTPCacheTTL:
-		hours, err := parsePositiveHours(m.settingsDraft.HTTPCacheTTLHours)
-		if err != nil {
-			hours = cacheTTLHoursOrDefault(0)
-		}
-		m.settingsDraft.HTTPCacheTTLHours = strconv.Itoa(max(1, hours+delta))
-	case settingsFieldAccessibleForms:
-		m.settingsDraft.AccessibleForms = !m.settingsDraft.AccessibleForms
-	}
-}
-
-func (m Model) activateSelectedSetting() (tea.Model, tea.Cmd) {
-	switch m.selectedSettingsField() {
-	case settingsFieldTheme, settingsFieldMarkdownImagePreview, settingsFieldAccessibleForms:
-		m.changeSelectedSetting(1)
-	case settingsFieldVisibleSources:
-		m.toggleSettingsSourceAtCursor()
-	case settingsFieldGitHubToken, settingsFieldProductHuntToken:
-		m.toggleSettingsSecretVisibility(m.selectedSettingsField())
-	case settingsFieldSave:
-		return m.applySettingsState(nil)
-	}
-	return m, nil
-}
-
-func settingsInputText(msg tea.KeyPressMsg) string {
-	if text := msg.Key().Text; text != "" {
-		return text
-	}
-	value := msg.String()
-	if len([]rune(value)) == 1 {
-		return value
-	}
-	return ""
-}
-
-func (m *Model) appendSelectedSettingText(text string) {
-	switch m.selectedSettingsField() {
-	case settingsFieldGitHubToken:
-		m.settingsDraft.GitHubToken += text
-	case settingsFieldProductHuntToken:
-		m.settingsDraft.ProductHuntToken += text
-	case settingsFieldHTTPCacheTTL:
-		for _, r := range text {
-			if r >= '0' && r <= '9' {
-				m.settingsDraft.HTTPCacheTTLHours += string(r)
-			}
-		}
-	}
-}
-
-func (m *Model) clearSelectedSettingText() {
-	switch m.selectedSettingsField() {
-	case settingsFieldGitHubToken:
-		m.settingsDraft.GitHubToken = ""
-	case settingsFieldProductHuntToken:
-		m.settingsDraft.ProductHuntToken = ""
-	case settingsFieldHTTPCacheTTL:
-		m.settingsDraft.HTTPCacheTTLHours = ""
-	}
-}
-
-func (m *Model) deleteSelectedSettingRune() {
-	switch m.selectedSettingsField() {
-	case settingsFieldGitHubToken:
-		m.settingsDraft.GitHubToken = dropLastRune(m.settingsDraft.GitHubToken)
-	case settingsFieldProductHuntToken:
-		m.settingsDraft.ProductHuntToken = dropLastRune(m.settingsDraft.ProductHuntToken)
-	case settingsFieldHTTPCacheTTL:
-		m.settingsDraft.HTTPCacheTTLHours = dropLastRune(m.settingsDraft.HTTPCacheTTLHours)
-	}
-}
-
-func (m *Model) applySettingsValue(field settingsField, value string) {
-	switch field {
-	case settingsFieldTheme:
-		m.settingsDraft.Theme = value
-	case settingsFieldMarkdownImagePreview:
-		m.settingsDraft.MarkdownImagePreview = value
-	case settingsFieldAccessibleForms:
-		m.settingsDraft.AccessibleForms = value == "true"
-	case settingsFieldVisibleSources:
-		m.setSettingsSourceCursor(value)
-		m.toggleSettingsSourceValue(value)
-	}
-}
-
-func (m *Model) toggleSettingsSecretVisibility(field settingsField) {
-	switch field {
-	case settingsFieldGitHubToken:
-		m.settingsShowGitHubToken = !m.settingsShowGitHubToken
-	case settingsFieldProductHuntToken:
-		m.settingsShowProductHuntToken = !m.settingsShowProductHuntToken
-	}
-}
-
-func (m *Model) toggleSettingsSourceAtCursor() {
-	options := settingsSourceOptions()
-	if len(options) == 0 {
-		return
-	}
-	m.clampSettingsSourceCursor()
-	m.toggleSettingsSourceValue(options[m.settingsSourceCursor].Value)
-}
-
-func (m *Model) toggleSettingsSourceValue(value string) {
-	value = strings.ToLower(strings.TrimSpace(value))
-	if value == "" {
-		return
-	}
-	enabled := settingsSourceEnabled(m.settingsDraft.EnabledSources, value)
-	next := make([]string, 0, len(m.settingsDraft.EnabledSources)+1)
-	for _, source := range normalizeSettingsEnabledSources(m.settingsDraft.EnabledSources) {
-		if source != value {
-			next = append(next, source)
-		}
-	}
-	if !enabled {
-		next = append(next, value)
-	}
-	m.settingsDraft.EnabledSources = next
-}
-
-func (m *Model) setSettingsSourceCursor(value string) {
-	for idx, option := range settingsSourceOptions() {
-		if option.Value == value {
-			m.settingsSourceCursor = idx
-			return
-		}
-	}
-}
-
-func (m *Model) clampSettingsSourceCursor() {
-	options := settingsSourceOptions()
-	if len(options) == 0 {
-		m.settingsSourceCursor = 0
-		return
-	}
-	m.settingsSourceCursor = clamp(m.settingsSourceCursor, 0, len(options)-1)
-}
-
-func (m Model) settingsHitAt(x, y int) (settingsHit, bool) {
-	bounds := m.settingsPanelBounds()
-	rows := m.settingsRenderRows(bounds.contentWidth)
-	if x < bounds.contentX || x >= bounds.contentX+bounds.contentWidth || y < bounds.contentY || y >= bounds.contentY+len(rows) {
-		return settingsHit{}, false
-	}
-	rowIndex := y - bounds.contentY
-	if rowIndex < 0 || rowIndex >= len(rows) {
-		return settingsHit{}, false
-	}
-	row := rows[rowIndex]
-	if row.field == settingsFieldNone && len(row.spans) == 0 {
-		return settingsHit{}, false
-	}
-	hit := settingsHit{field: row.field}
-	relativeX := x - bounds.contentX
-	for _, span := range row.spans {
-		if relativeX >= span.start && relativeX < span.end {
-			hit.field = span.field
-			hit.value = span.value
-			hit.action = span.action
-			return hit, true
-		}
-	}
-	return hit, true
+func (m *Model) newSettingsForm() *huh.Form {
+	return huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title("Display").
+				Next(false),
+			huh.NewSelect[string]().
+				Key("settings_theme").
+				Title("Theme").
+				Options(settingsHuhOptions(themeSettingsOptions())...).
+				Value(&m.settingsDraft.Theme),
+			huh.NewSelect[string]().
+				Key("settings_markdown_image_preview").
+				Title("Markdown image preview").
+				Options(settingsHuhOptions(markdownImagePreviewSettingsOptions)...).
+				Value(&m.settingsDraft.MarkdownImagePreview),
+		).Title("Display"),
+		huh.NewGroup(
+			huh.NewNote().
+				Title("Sources").
+				Next(false),
+			huh.NewMultiSelect[string]().
+				Key("settings_visible_sources").
+				Title("Visible sources").
+				Options(settingsHuhOptions(settingsSourceOptions())...).
+				Value(&m.settingsDraft.EnabledSources).
+				Validate(validateSettingsSources),
+		).Title("Sources"),
+		huh.NewGroup(
+			huh.NewNote().
+				Title("Credentials").
+				Next(false),
+			huh.NewInput().
+				Key("settings_github_token").
+				Title("GitHub token").
+				EchoMode(huh.EchoModePassword).
+				Value(&m.settingsDraft.GitHubToken),
+			huh.NewInput().
+				Key("settings_producthunt_token").
+				Title("Product Hunt token").
+				EchoMode(huh.EchoModePassword).
+				Value(&m.settingsDraft.ProductHuntToken),
+		).Title("Credentials"),
+		huh.NewGroup(
+			huh.NewNote().
+				Title("System").
+				Next(false),
+			huh.NewInput().
+				Key("settings_http_cache_ttl").
+				Title("HTTP cache TTL").
+				Description("Hours").
+				Value(&m.settingsDraft.HTTPCacheTTLHours).
+				Validate(validateSettingsTTL),
+			huh.NewConfirm().
+				Key("settings_accessible_forms").
+				Title("Accessible forms").
+				Affirmative("Enabled").
+				Negative("Disabled").
+				Value(&m.settingsDraft.AccessibleForms),
+		).Title("System"),
+	).
+		WithAccessible(m.config.AccessibleForms).
+		WithLayout(huh.LayoutStack).
+		WithWidth(settingsFormWidth(m.width)).
+		WithHeight(settingsFormHeight(m.height))
 }
 
 func (m Model) renderSettingsPanel() string {
-	bounds := m.settingsPanelBounds()
-	rows := m.settingsRenderRows(bounds.contentWidth)
-	lines := make([]string, 0, len(rows))
-	for _, row := range rows {
-		lines = append(lines, clip(row.line, bounds.contentWidth))
+	width := settingsPanelWidth(m.width)
+	form := m.styles.muted.Render("Settings form unavailable.")
+	if m.settingsForm != nil {
+		form = m.renderSettingsFormViewport(m.settingsForm.View())
 	}
-	help := clip(m.settingsHelpRow(), bounds.contentWidth)
-	if len(lines) >= bounds.contentHeight {
-		lines = lines[:bounds.contentHeight]
-		lines[bounds.contentHeight-1] = help
+	panel := m.styles.panel.Width(width).Render(strings.Join([]string{
+		m.styles.header.Render("tildewire SETTINGS"),
+		"",
+		form,
+	}, "\n"))
+	return placeBlock(panel, 0, 0, max(40, m.width))
+}
+
+func (m *Model) resizeSettingsForm(width, height int) {
+	if m.settingsForm == nil {
+		return
+	}
+	m.settingsForm.WithWidth(settingsFormWidth(width)).WithHeight(settingsFormHeight(height))
+	m.clampSettingsScrollOffset()
+}
+
+func (m Model) renderSettingsFormViewport(form string) string {
+	lines := strings.Split(form, "\n")
+	visible := settingsFormVisibleRows(m.height)
+	offset := clamp(m.settingsScrollOffset, 0, max(0, len(lines)-visible))
+	end := min(len(lines), offset+visible)
+	if offset < end {
+		lines = lines[offset:end]
 	} else {
-		for len(lines) < bounds.contentHeight-1 {
-			lines = append(lines, "")
+		lines = nil
+	}
+	return fillLines(lines, visible)
+}
+
+func (m *Model) scrollSettings(delta int) {
+	m.settingsScrollOffset += delta
+	m.clampSettingsScrollOffset()
+}
+
+func (m *Model) clampSettingsScrollOffset() {
+	m.settingsScrollOffset = clamp(m.settingsScrollOffset, 0, m.maxSettingsScrollOffset())
+}
+
+func (m Model) maxSettingsScrollOffset() int {
+	if m.settingsForm == nil {
+		return 0
+	}
+	lines := strings.Split(m.settingsForm.View(), "\n")
+	return max(0, len(lines)-settingsFormVisibleRows(m.height))
+}
+
+func (m Model) settingsPageSize() int {
+	return max(1, settingsFormVisibleRows(m.height)-1)
+}
+
+func (m *Model) ensureSettingsFocusedFieldVisible() {
+	if m.settingsForm == nil {
+		return
+	}
+	line, ok := m.settingsFocusedFieldLine()
+	if !ok {
+		m.clampSettingsScrollOffset()
+		return
+	}
+	visible := settingsFormVisibleRows(m.height)
+	if line < m.settingsScrollOffset {
+		m.settingsScrollOffset = line
+	} else if line >= m.settingsScrollOffset+visible {
+		m.settingsScrollOffset = line - visible + 1
+	}
+	m.clampSettingsScrollOffset()
+}
+
+func (m Model) settingsFocusedFieldLine() (int, bool) {
+	field := m.settingsForm.GetFocusedField()
+	if field == nil {
+		return 0, false
+	}
+	title, ok := settingsFieldTitles[field.GetKey()]
+	if !ok {
+		return 0, false
+	}
+	for idx, line := range strings.Split(m.settingsForm.View(), "\n") {
+		if strings.Contains(line, title) {
+			return idx, true
 		}
-		lines = append(lines, help)
 	}
-	panel := m.styles.panel.
-		Width(bounds.width).
-		Height(bounds.contentHeight).
-		Render(strings.Join(lines, "\n"))
-	return placeBlock(panel, bounds.x, bounds.y, max(40, m.width))
+	return 0, false
 }
 
-func (m Model) settingsPanelBounds() settingsPanelBounds {
-	renderWidth := max(40, m.width)
-	renderHeight := max(12, m.height)
-	width := renderWidth
-	height := renderHeight
-	x := 0
-	y := 0
-	left := m.styles.panel.GetBorderLeftSize() + m.styles.panel.GetPaddingLeft()
-	top := m.styles.panel.GetBorderTopSize() + m.styles.panel.GetPaddingTop()
-	frameWidth, frameHeight := m.styles.panel.GetFrameSize()
-	return settingsPanelBounds{
-		x:             x,
-		y:             y,
-		width:         width,
-		height:        height,
-		contentX:      x + left,
-		contentY:      y + top,
-		contentWidth:  max(1, width-frameWidth),
-		contentHeight: max(1, height-frameHeight),
-	}
+func settingsPanelWidth(width int) int {
+	return max(48, width-4)
 }
 
-func (m Model) settingsRenderRows(width int) []settingsRenderRow {
-	rows := []settingsRenderRow{
-		{line: m.styles.header.Render("tildewire SETTINGS")},
-		{line: ""},
-		m.settingsSectionRow("Display"),
-	}
-	rows = append(rows,
-		m.paddedSettingsRow(m.settingsChoiceRow(settingsFieldTheme, "Theme", themeSettingsOptions(), m.settingsDraft.Theme, width))...,
-	)
-	rows = append(rows,
-		m.settingsChoiceRow(settingsFieldMarkdownImagePreview, "Markdown image preview", markdownImagePreviewSettingsOptions, m.settingsDraft.MarkdownImagePreview, width),
-		m.settingsDividerRow(width),
-	)
-	rows = append(rows,
-		m.settingsSectionRow("Sources"),
-	)
-	rows = append(rows,
-		m.paddedSettingsRow(m.settingsSourcesRow(width))...,
-	)
-	rows = append(rows,
-		m.settingsDividerRow(width),
-	)
-	rows = append(rows,
-		m.settingsSectionRow("Credentials"),
-	)
-	rows = append(rows,
-		m.paddedSettingsRow(m.settingsSecretRow(settingsFieldGitHubToken, "GitHub token", m.settingsDraft.GitHubToken, m.settingsShowGitHubToken, width))...,
-	)
-	rows = append(rows,
-		m.settingsSecretRow(settingsFieldProductHuntToken, "Product Hunt token", m.settingsDraft.ProductHuntToken, m.settingsShowProductHuntToken, width),
-		m.settingsDividerRow(width),
-	)
-	rows = append(rows,
-		m.settingsSectionRow("System"),
-	)
-	rows = append(rows,
-		m.paddedSettingsRow(m.settingsTextRow(settingsFieldHTTPCacheTTL, "HTTP cache TTL", settingsHoursLabel(m.settingsDraft.HTTPCacheTTLHours), width))...,
-	)
-	rows = append(rows,
-		m.settingsChoiceRow(settingsFieldAccessibleForms, "Accessible forms", accessibleFormSettingsOptions(), boolSettingsValue(m.settingsDraft.AccessibleForms), width),
-	)
-	rows = append(rows,
-		settingsRenderRow{line: ""},
-		settingsRenderRow{line: ""},
-		m.settingsActionRow(width),
-	)
-	return rows
+func settingsFormWidth(width int) int {
+	return max(40, width-4)
 }
 
-func (m Model) settingsSectionRow(title string) settingsRenderRow {
-	return settingsRenderRow{line: m.styles.header.Render(title)}
+func settingsFormHeight(height int) int {
+	return settingsFormVisibleRows(height)
 }
 
-func (m Model) paddedSettingsRow(row settingsRenderRow) []settingsRenderRow {
-	return []settingsRenderRow{
-		{line: ""},
-		row,
-	}
+func settingsFormVisibleRows(height int) int {
+	return max(8, max(12, height)-4)
 }
 
-func (m Model) settingsDividerRow(width int) settingsRenderRow {
-	dividerWidth := max(1, width-2)
-	return settingsRenderRow{line: m.styles.muted.Render("  " + strings.Repeat("─", dividerWidth))}
+var settingsFieldTitles = map[string]string{
+	"settings_theme":                  "Theme",
+	"settings_markdown_image_preview": "Markdown image preview",
+	"settings_visible_sources":        "Visible sources",
+	"settings_github_token":           "GitHub token",
+	"settings_producthunt_token":      "Product Hunt token",
+	"settings_http_cache_ttl":         "HTTP cache TTL",
+	"settings_accessible_forms":       "Accessible forms",
 }
 
-func (m Model) settingsHelpRow() string {
-	parts := []string{
-		"j/k move",
-		"click",
-		"l/r change",
-		"space",
-		"type",
-		"ctrl+u clear",
-		"enter save",
-		"esc cancel",
+func settingsHuhOptions(options []settingsOption) []huh.Option[string] {
+	huhOptions := make([]huh.Option[string], 0, len(options))
+	for _, option := range options {
+		huhOptions = append(huhOptions, huh.NewOption(option.Label, option.Value))
 	}
-	return m.styles.muted.Render(strings.Join(parts, " ｜ "))
-}
-
-func (m Model) settingsChoiceRow(field settingsField, title string, options []settingsOption, value string, width int) settingsRenderRow {
-	focused := m.selectedSettingsField() == field
-	builder := m.newSettingsFieldLine(focused, title, width)
-	for idx, option := range options {
-		if idx > 0 {
-			builder.write(" ")
-		}
-		selected := option.Value == value
-		builder.writeHit(field, option.Value, m.settingsChoiceChip(option.Label, selected, focused))
-	}
-	return settingsRenderRow{field: field, line: builder.string(), spans: builder.spans}
-}
-
-func (m Model) settingsSourcesRow(width int) settingsRenderRow {
-	field := settingsFieldVisibleSources
-	focused := m.selectedSettingsField() == field
-	builder := m.newSettingsFieldLine(focused, "Visible sources", width)
-	options := settingsSourceOptions()
-	for idx, option := range options {
-		if idx > 0 {
-			builder.write(" ")
-		}
-		selected := settingsSourceEnabled(m.settingsDraft.EnabledSources, option.Value)
-		subfocused := focused && idx == m.settingsSourceCursor
-		builder.writeHit(field, option.Value, m.settingsSourceChip(option.Label, selected, subfocused))
-	}
-	return settingsRenderRow{field: field, line: builder.string(), spans: builder.spans}
-}
-
-func (m Model) settingsTextRow(field settingsField, title string, value string, width int) settingsRenderRow {
-	focused := m.selectedSettingsField() == field
-	builder := m.newSettingsFieldLine(focused, title, width)
-	if focused {
-		value = m.styles.control.Render(value)
-	} else if strings.TrimSpace(value) == "(empty)" {
-		value = m.styles.muted.Render(value)
-	}
-	builder.write(value)
-	return settingsRenderRow{field: field, line: builder.string()}
-}
-
-func (m Model) settingsSecretRow(field settingsField, title string, value string, show bool, width int) settingsRenderRow {
-	focused := m.selectedSettingsField() == field
-	builder := m.newSettingsFieldLine(focused, title, width)
-	display := maskSettingsSecret(value)
-	if show {
-		display = emptySettingsValue(value)
-	}
-	if focused {
-		display = m.styles.control.Render(display)
-	} else if strings.TrimSpace(display) == "(empty)" {
-		display = m.styles.muted.Render(display)
-	}
-	builder.write(display)
-	builder.write("  ")
-	builder.writeHit(field, "", m.settingsSecretToggleButton(focused || show), settingsActionToggleSecret)
-	return settingsRenderRow{field: field, line: builder.string(), spans: builder.spans}
-}
-
-func (m Model) settingsActionRow(width int) settingsRenderRow {
-	focused := m.selectedSettingsField() == settingsFieldSave
-	builder := settingsLineBuilder{}
-	save := "Save settings"
-	if focused {
-		save = m.styles.active.Render("> " + save)
-	} else {
-		save = m.styles.control.Render(save)
-	}
-	builder.writeHit(settingsFieldSave, "", save, settingsActionSave)
-	builder.write("   ")
-	builder.writeHit(settingsFieldNone, "", m.styles.muted.Render("Cancel"), settingsActionCancel)
-	offset := max(0, width-builder.cell-2)
-	return settingsRenderRow{field: settingsFieldSave, line: strings.Repeat(" ", offset) + clip(builder.string(), width-offset), spans: offsetSettingsHitSpans(builder.spans, offset)}
-}
-
-func offsetSettingsHitSpans(spans []settingsHitSpan, offset int) []settingsHitSpan {
-	if offset == 0 {
-		return spans
-	}
-	next := make([]settingsHitSpan, len(spans))
-	for idx, span := range spans {
-		span.start += offset
-		span.end += offset
-		next[idx] = span
-	}
-	return next
-}
-
-func (m Model) newSettingsFieldLine(focused bool, title string, width int) settingsLineBuilder {
-	labelWidth := settingsLabelWidth(width)
-	builder := settingsLineBuilder{}
-	if focused {
-		builder.write(m.styles.active.Render("> "))
-		builder.write(m.styles.active.Render(fmt.Sprintf("%-*s", labelWidth, title)))
-	} else {
-		builder.write("  ")
-		builder.write(fmt.Sprintf("%-*s", labelWidth, title))
-	}
-	builder.write(" ")
-	return builder
-}
-
-func settingsLabelWidth(width int) int {
-	if width < 72 {
-		return 21
-	}
-	return 25
-}
-
-func (b *settingsLineBuilder) write(value string) {
-	b.line += value
-	b.cell += ansi.StringWidth(value)
-}
-
-func (b *settingsLineBuilder) writeHit(field settingsField, value string, rendered string, actions ...settingsAction) {
-	action := settingsActionNone
-	if len(actions) > 0 {
-		action = actions[0]
-	}
-	start := b.cell
-	b.write(rendered)
-	b.spans = append(b.spans, settingsHitSpan{
-		start:  start,
-		end:    b.cell,
-		field:  field,
-		value:  value,
-		action: action,
-	})
-}
-
-func (b *settingsLineBuilder) string() string {
-	return b.line
-}
-
-func (m Model) settingsChoiceChip(label string, selected bool, focused bool) string {
-	chip := "[" + label + "]"
-	if selected {
-		if focused {
-			return m.styles.active.Render(chip)
-		}
-		return m.styles.control.Render(chip)
-	}
-	return m.styles.muted.Render(chip)
-}
-
-func (m Model) settingsSourceChip(label string, selected bool, focused bool) string {
-	marker := " "
-	if selected {
-		marker = "x"
-	}
-	chip := "[" + marker + "] " + label
-	if focused {
-		return m.styles.active.Render(chip)
-	}
-	if selected {
-		return m.styles.ok.Render(chip)
-	}
-	return m.styles.muted.Render(chip)
-}
-
-func settingsHoursLabel(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "(empty)"
-	}
-	return value + " hours"
-}
-
-func maskSettingsSecret(value string) string {
-	if strings.TrimSpace(value) == "" {
-		return "(empty)"
-	}
-	runes := []rune(value)
-	count := min(len(runes), 12)
-	return strings.Repeat("*", count)
-}
-
-func emptySettingsValue(value string) string {
-	if strings.TrimSpace(value) == "" {
-		return "(empty)"
-	}
-	return value
-}
-
-func (m Model) settingsSecretToggleButton(active bool) string {
-	button := "[👁]"
-	if active {
-		return m.styles.active.Render(button)
-	}
-	return m.styles.muted.Render(button)
-}
-
-func boolSettingsValue(value bool) string {
-	if value {
-		return "true"
-	}
-	return "false"
-}
-
-func accessibleFormSettingsOptions() []settingsOption {
-	return []settingsOption{
-		{Label: "Enabled", Value: "true"},
-		{Label: "Disabled", Value: "false"},
-	}
+	return huhOptions
 }
 
 func settingsSourceOptions() []settingsOption {
@@ -786,30 +366,16 @@ func settingsSourceOptions() []settingsOption {
 	return options
 }
 
-func cycleSettingsOption(options []settingsOption, value string, delta int) string {
-	if len(options) == 0 {
-		return value
+func validateSettingsSources(values []string) error {
+	if len(normalizeSettingsEnabledSources(values)) == 0 {
+		return fmt.Errorf("at least one source is required")
 	}
-	current := 0
-	for idx, option := range options {
-		if option.Value == value {
-			current = idx
-			break
-		}
-	}
-	next := (current + delta) % len(options)
-	if next < 0 {
-		next += len(options)
-	}
-	return options[next].Value
+	return nil
 }
 
-func dropLastRune(value string) string {
-	if value == "" {
-		return ""
-	}
-	runes := []rune(value)
-	return string(runes[:len(runes)-1])
+func validateSettingsTTL(value string) error {
+	_, err := parsePositiveHours(value)
+	return err
 }
 
 func (m Model) saveSettingsCmd(cfg config.Config) tea.Cmd {
@@ -888,16 +454,6 @@ func settingsEnabledSourcesOrDefault(values []string) []string {
 		return sourceStrings(app.SourceIDs())
 	}
 	return normalized
-}
-
-func settingsSourceEnabled(values []string, source string) bool {
-	source = strings.ToLower(strings.TrimSpace(source))
-	for _, value := range normalizeSettingsEnabledSources(values) {
-		if value == source {
-			return true
-		}
-	}
-	return false
 }
 
 func sourceIDsFromStrings(values []string) []domain.SourceID {
