@@ -50,7 +50,7 @@ func (s *Store) ReplaceRecommendationScores(ctx context.Context, scores []domain
 }
 
 // ListRecommendedFeed returns items ordered by persisted recommendation score.
-func (s *Store) ListRecommendedFeed(ctx context.Context, query FeedQuery) ([]domain.FeedEntry, error) {
+func (s *Store) ListRecommendedFeed(ctx context.Context, query domain.FeedQuery) ([]domain.FeedEntry, error) {
 	limit := query.Limit
 	if limit <= 0 {
 		limit = 200
@@ -90,14 +90,13 @@ func (s *Store) ListRecommendedFeed(ctx context.Context, query FeedQuery) ([]dom
 	for idx := range entries {
 		itemID := entries[idx].Item.ID
 		entries[idx].Sources = sourcesByItem[itemID]
-		entries[idx].Item.Sources = sourcesByItem[itemID]
 		entries[idx].Item.Tags = tagsByItem[itemID]
 	}
 	return entries, nil
 }
 
 // CountRecommendedFeed counts the persisted virtual Recommend view after filters.
-func (s *Store) CountRecommendedFeed(ctx context.Context, query FeedQuery) (int, error) {
+func (s *Store) CountRecommendedFeed(ctx context.Context, query domain.FeedQuery) (int, error) {
 	normalized, ok := normalizeFeedQueryForStore(query)
 	if !ok {
 		return 0, nil

@@ -11,7 +11,14 @@ import (
 
 // Service coordinates stores, sources, sorting, and user state.
 type Service struct {
-	store               FeedStore
+	feeds               FeedReader
+	feedWriter          FeedWriter
+	items               ItemStateStore
+	sourceTelemetry     SourceTelemetryStore
+	personalization     PersonalizationStore
+	recommendations     RecommendationStore
+	dedupe              DedupeStore
+	cache               CacheStore
 	client              httpx.Requester
 	adapters            []SourceAdapter
 	sources             []domain.SourceID
@@ -64,18 +71,43 @@ type RefreshOptions struct {
 	Mode  RefreshMode
 }
 
-// NewService creates an application service.
+// NewService creates an application service backed by one aggregate store.
 func NewService(store FeedStore, client httpx.Requester, adapters []SourceAdapter) *Service {
+	return NewServiceWithStores(serviceStoresFromFeedStore(store), client, adapters)
+}
+
+// NewServiceWithStores creates an application service from role-specific stores.
+func NewServiceWithStores(stores ServiceStores, client httpx.Requester, adapters []SourceAdapter) *Service {
 	ordered := orderedAdapters(adapters)
 	enabled := enabledSourceSet(nil)
 	return &Service{
-		store:               store,
+		feeds:               stores.Feeds,
+		feedWriter:          stores.FeedWriter,
+		items:               stores.Items,
+		sourceTelemetry:     stores.SourceTelemetry,
+		personalization:     stores.Personalization,
+		recommendations:     stores.Recommendations,
+		dedupe:              stores.Dedupe,
+		cache:               stores.Cache,
 		client:              client,
 		adapters:            ordered,
 		sources:             countSources(ordered, enabled),
 		enabled:             enabled,
 		recommendationDirty: true,
 		recommendationGen:   1,
+	}
+}
+
+func serviceStoresFromFeedStore(store FeedStore) ServiceStores {
+	return ServiceStores{
+		Feeds:           store,
+		FeedWriter:      store,
+		Items:           store,
+		SourceTelemetry: store,
+		Personalization: store,
+		Recommendations: store,
+		Dedupe:          store,
+		Cache:           store,
 	}
 }
 
@@ -140,7 +172,7 @@ func (s *Service) LoadFeed(ctx context.Context, view domain.SourceID, filter Fee
 	if err != nil {
 		return Snapshot{}, err
 	}
-	candidates, err := s.store.ListDedupeCandidates(ctx, 20)
+	candidates, err := s.dedupe.ListDedupeCandidates(ctx, 20)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -194,7 +226,7 @@ func (s *Service) loadFeedEntries(ctx context.Context, view domain.SourceID, fil
 	if err != nil {
 		return nil, nil, err
 	}
-	rules, err := s.store.ListPersonalizationRules(ctx, true)
+	rules, err := s.personalization.ListPersonalizationRules(ctx, true)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -214,7 +246,7 @@ func (s *Service) loadFeedEntries(ctx context.Context, view domain.SourceID, fil
 }
 
 func (s *Service) loadSourceStatuses(ctx context.Context) ([]domain.SourceHealth, error) {
-	statuses, err := s.store.SourceStatuses(ctx)
+	statuses, err := s.sourceTelemetry.SourceStatuses(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -227,13 +259,13 @@ func (s *Service) loadSourceCounts(ctx context.Context, view domain.SourceID, qu
 		return nil, err
 	}
 	if view == domain.SourceRecommend {
-		viewCount, err := s.store.CountRecommendedFeed(ctx, query)
+		viewCount, err := s.feeds.CountRecommendedFeed(ctx, query)
 		if err != nil {
 			return nil, err
 		}
 		counts[domain.SourceRecommend] = capRecommendCount(viewCount)
 	} else if view != "" && view != domain.SourceAll {
-		viewCount, err := s.store.CountFeed(ctx, query)
+		viewCount, err := s.feeds.CountFeed(ctx, query)
 		if err != nil {
 			return nil, err
 		}
@@ -243,7 +275,7 @@ func (s *Service) loadSourceCounts(ctx context.Context, view domain.SourceID, qu
 }
 
 func (s *Service) loadFetchHistory(ctx context.Context) ([]domain.FetchEvent, error) {
-	fetchHistory, err := s.store.RecentFetchEvents(ctx, 12)
+	fetchHistory, err := s.sourceTelemetry.RecentFetchEvents(ctx, 12)
 	if err != nil {
 		return nil, err
 	}
@@ -252,9 +284,9 @@ func (s *Service) loadFetchHistory(ctx context.Context) ([]domain.FetchEvent, er
 
 func (s *Service) listFeedForView(ctx context.Context, view domain.SourceID, query domain.FeedQuery) ([]domain.FeedEntry, error) {
 	if view == domain.SourceRecommend {
-		return s.store.ListRecommendedFeed(ctx, query)
+		return s.feeds.ListRecommendedFeed(ctx, query)
 	}
-	return s.store.ListFeed(ctx, query)
+	return s.feeds.ListFeed(ctx, query)
 }
 
 func (s *Service) markRecommendationsDirty() {

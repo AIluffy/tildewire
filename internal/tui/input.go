@@ -24,12 +24,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.help.ShowAll = !m.help.ShowAll
 		return m, nil
 	case key.Matches(msg, m.keys.Back):
-		m.detail = false
-		m.health = false
-		m.rulesOpen = false
-		m.dedupeOpen = false
-		m.recommendDiagnosticsOpen = false
-		m.paletteOpen = false
+		m.closeOverlay()
 		return m, nil
 	case key.Matches(msg, m.keys.OpenDetail):
 		if entry, ok := m.selected(); ok {
@@ -70,7 +65,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		m.rememberFeedSelection()
 		m.filter.SourceView = next
-		m.detail = false
+		m.closeOverlay()
 		m.restoreFeedSelection()
 		m.resetPreviewScroll()
 		m.message = "scope: " + sourceViewLabel(m.view, next)
@@ -89,13 +84,6 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case key.Matches(msg, m.keys.Settings):
 		m.openSettingsForm()
-		m.detail = false
-		m.health = false
-		m.rulesOpen = false
-		m.dedupeOpen = false
-		m.recommendDiagnosticsOpen = false
-		m.filterOpen = false
-		m.paletteOpen = false
 		m.message = "settings"
 		return m, nil
 	case key.Matches(msg, m.keys.Refresh):
@@ -149,13 +137,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.copyMarkdownLinkCmd(entry)
 	case key.Matches(msg, m.keys.Health):
-		m.health = true
-		m.detail = false
-		m.filterOpen = false
-		m.paletteOpen = false
-		m.rulesOpen = false
-		m.dedupeOpen = false
-		m.recommendDiagnosticsOpen = false
+		m.openOverlay(overlayHealth)
 		return m, nil
 	}
 	return m, nil
@@ -209,7 +191,7 @@ func (m Model) handleHealthKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return next, cmd
 	case key.Matches(msg, m.keys.Back):
-		m.health = false
+		m.closeOverlay()
 		return m, nil
 	}
 	return m, nil
@@ -223,7 +205,7 @@ func (m Model) handleRecommendDiagnosticsKey(msg tea.KeyPressMsg) (tea.Model, te
 		m.help.ShowAll = !m.help.ShowAll
 		return m, nil
 	case key.Matches(msg, m.keys.Back):
-		m.recommendDiagnosticsOpen = false
+		m.closeOverlay()
 		return m, nil
 	}
 	return m, nil
@@ -237,7 +219,7 @@ func (m Model) handleDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.help.ShowAll = !m.help.ShowAll
 		return m, nil
 	case key.Matches(msg, m.keys.Back):
-		m.detail = false
+		m.closeOverlay()
 		m.detailOffset = 0
 		return m, m.clearDetailRawImagesCmd()
 	case key.Matches(msg, m.keys.PreviewUp):
@@ -310,7 +292,7 @@ func (m Model) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		m.mode = inputModeNormal
 		m.filter.Search = strings.TrimSpace(m.searchDraft)
-		m.detail = false
+		m.closeOverlay()
 		m.feedOffset = 0
 		m.rememberFeedSelection()
 		m.resetPreviewScroll()
@@ -354,7 +336,7 @@ func (m Model) liveSearch() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.filter.Search = search
-	m.detail = false
+	m.closeOverlay()
 	m.feedOffset = 0
 	m.rememberFeedSelection()
 	m.resetPreviewScroll()
@@ -369,7 +351,7 @@ func (m Model) restoreCancelledSearch() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.filter.Search = search
-	m.detail = false
+	m.closeOverlay()
 	m.feedOffset = 0
 	m.rememberFeedSelection()
 	m.resetPreviewScroll()
@@ -388,10 +370,9 @@ func (m Model) handleFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		previousSourceView := m.filter.SourceView
 		previousKey := m.currentFeedSelectionKey()
 		m.rememberFeedSelection()
-		m.filterOpen = false
+		m.closeOverlay()
 		m.view = m.normalizeFilterDraftView(m.filterDraftView)
 		m.filter = m.normalizeFilterDraftForView(m.view, m.filterDraft)
-		m.detail = false
 		if m.currentFeedSelectionKey() == previousKey {
 			m.feedOffset = 0
 			m.rememberFeedSelection()
@@ -405,7 +386,7 @@ func (m Model) handleFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.loadCmd()
 	case "esc":
-		m.filterOpen = false
+		m.closeOverlay()
 		m.message = "filter cancelled"
 		return m, nil
 	case "j", "down", "tab":

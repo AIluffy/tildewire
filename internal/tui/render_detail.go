@@ -105,7 +105,7 @@ func (m Model) centerDetailLines(lines []string, contentWidth int) []string {
 }
 
 func (m *Model) refreshDetailContentCache() {
-	if !m.detail {
+	if !m.overlayIs(overlayDetail) {
 		return
 	}
 	_ = m.detailContentLines(m.detailContentWidth())

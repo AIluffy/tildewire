@@ -54,7 +54,6 @@ type refreshState struct {
 }
 
 type detailState struct {
-	detail               bool
 	detailLoading        bool
 	detailEntryID        string
 	itemDetail           domain.ItemDetail
@@ -69,23 +68,18 @@ type detailState struct {
 }
 
 type overlayState struct {
-	paletteOpen                 bool
+	overlay                     overlayMode
 	paletteFilter               string
 	paletteCursor               int
 	paletteOffset               int
-	filterOpen                  bool
 	filterDraft                 app.FeedFilter
 	filterDraftView             domain.SourceID
 	filterCursor                int
-	health                      bool
-	rulesOpen                   bool
 	ruleCursor                  int
 	ruleForm                    *huh.Form
 	ruleDraft                   ruleDraft
 	ruleEditingID               int64
-	dedupeOpen                  bool
 	dedupeCursor                int
-	recommendDiagnosticsOpen    bool
 	recommendDiagnosticsLoading bool
 	recommendDiagnostics        domain.RecommendationDiagnostics
 	recommendDiagnosticsError   string
@@ -96,7 +90,6 @@ type overlayState struct {
 }
 
 type settingsState struct {
-	settingsOpen         bool
 	settingsForm         *huh.Form
 	settingsDraft        settingsDraft
 	settingsScrollOffset int

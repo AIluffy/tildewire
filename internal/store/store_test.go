@@ -23,7 +23,7 @@ func TestStoreMigratesUpsertsStateAndHiddenFiltering(t *testing.T) {
 	if err := store.UpsertFeedItems(ctx, []domain.FeedItem{item}); err != nil {
 		t.Fatal(err)
 	}
-	entries, err := store.ListFeed(ctx, FeedQuery{})
+	entries, err := store.ListFeed(ctx, domain.FeedQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestStoreMigratesUpsertsStateAndHiddenFiltering(t *testing.T) {
 	if err := store.SetRead(ctx, item.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	entries, err = store.ListFeed(ctx, FeedQuery{})
+	entries, err = store.ListFeed(ctx, domain.FeedQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,14 +49,14 @@ func TestStoreMigratesUpsertsStateAndHiddenFiltering(t *testing.T) {
 	if err := store.SetHidden(ctx, item.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	entries, err = store.ListFeed(ctx, FeedQuery{})
+	entries, err = store.ListFeed(ctx, domain.FeedQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(entries) != 0 {
 		t.Fatalf("hidden item should be filtered, got %d", len(entries))
 	}
-	entries, err = store.ListFeed(ctx, FeedQuery{IncludeHidden: true})
+	entries, err = store.ListFeed(ctx, domain.FeedQuery{IncludeHidden: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestStoreSourceNativeOrdering(t *testing.T) {
 	if err := store.UpsertFeedItems(ctx, items); err != nil {
 		t.Fatal(err)
 	}
-	entries, err := store.ListFeed(ctx, FeedQuery{Source: domain.SourceHackerNews})
+	entries, err := store.ListFeed(ctx, domain.FeedQuery{Source: domain.SourceHackerNews})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestStoreUpsertCanonicalizesItemsBeforePersisting(t *testing.T) {
 	if err := store.UpsertFeedItems(ctx, []domain.FeedItem{item}); err != nil {
 		t.Fatal(err)
 	}
-	entries, err := store.ListFeed(ctx, FeedQuery{})
+	entries, err := store.ListFeed(ctx, domain.FeedQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +212,7 @@ func TestStoreListFeedAssemblesSourcesAndTagsForMultipleItems(t *testing.T) {
 	if err := store.UpsertFeedItems(ctx, []domain.FeedItem{first, second}); err != nil {
 		t.Fatal(err)
 	}
-	entries, err := store.ListFeed(ctx, FeedQuery{IncludeHidden: true})
+	entries, err := store.ListFeed(ctx, domain.FeedQuery{IncludeHidden: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,8 +224,11 @@ func TestStoreListFeedAssemblesSourcesAndTagsForMultipleItems(t *testing.T) {
 		byID[entry.Item.ID] = entry
 	}
 	repo := byID[first.ID]
-	if len(repo.Sources) != 2 || len(repo.Item.Sources) != 2 {
+	if len(repo.Sources) != 2 {
 		t.Fatalf("repo sources not assembled: %+v", repo)
+	}
+	if len(repo.Item.Sources) != 0 {
+		t.Fatalf("feed entry source context should not be mirrored into item: %+v", repo.Item.Sources)
 	}
 	if len(repo.Item.Tags) != 2 || repo.Item.Tags[0] != "github" || repo.Item.Tags[1] != "go" {
 		t.Fatalf("repo tags not assembled: %+v", repo.Item.Tags)
@@ -253,7 +256,7 @@ func TestStoreListFeedSearchUsesFTSAndReindexesItems(t *testing.T) {
 	}
 
 	for _, search := range []string{"observability", "SQLite Search"} {
-		entries, err := store.ListFeed(ctx, FeedQuery{Search: search})
+		entries, err := store.ListFeed(ctx, domain.FeedQuery{Search: search})
 		if err != nil {
 			t.Fatalf("search %q failed: %v", search, err)
 		}
@@ -261,21 +264,21 @@ func TestStoreListFeedSearchUsesFTSAndReindexesItems(t *testing.T) {
 			t.Fatalf("search %q returned %+v, want indexed item", search, entries)
 		}
 	}
-	entries, err := store.ListFeed(ctx, FeedQuery{Search: "fts5"})
+	entries, err := store.ListFeed(ctx, domain.FeedQuery{Search: "fts5"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(entries) != 0 {
 		t.Fatalf("metadata JSON value should not be indexed as natural language, got %+v", entries)
 	}
-	entries, err = store.ListFeed(ctx, FeedQuery{Search: "punctuation_noise"})
+	entries, err = store.ListFeed(ctx, domain.FeedQuery{Search: "punctuation_noise"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(entries) != 0 {
 		t.Fatalf("metadata JSON key should not be indexed as natural language, got %+v", entries)
 	}
-	if _, err := store.ListFeed(ctx, FeedQuery{Search: "!!!"}); err != nil {
+	if _, err := store.ListFeed(ctx, domain.FeedQuery{Search: "!!!"}); err != nil {
 		t.Fatalf("punctuation-only search should not error: %v", err)
 	}
 
@@ -286,14 +289,14 @@ func TestStoreListFeedSearchUsesFTSAndReindexesItems(t *testing.T) {
 	if err := store.UpsertFeedItems(ctx, []domain.FeedItem{item}); err != nil {
 		t.Fatal(err)
 	}
-	entries, err = store.ListFeed(ctx, FeedQuery{Search: "observability"})
+	entries, err = store.ListFeed(ctx, domain.FeedQuery{Search: "observability"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(entries) != 0 {
 		t.Fatalf("old indexed tag should have been removed, got %+v", entries)
 	}
-	entries, err = store.ListFeed(ctx, FeedQuery{Search: "fresh"})
+	entries, err = store.ListFeed(ctx, domain.FeedQuery{Search: "fresh"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,15 +336,15 @@ func TestStoreListAndCountFeedStayConsistentForFilters(t *testing.T) {
 
 	cases := []struct {
 		name string
-		q    FeedQuery
+		q    domain.FeedQuery
 		want []string
 	}{
-		{name: "default hides hidden", q: FeedQuery{}, want: []string{hnTop.ID, hnBest.ID, github.ID}},
-		{name: "include hidden", q: FeedQuery{IncludeHidden: true}, want: []string{hnTop.ID, hnBest.ID, github.ID, hidden.ID}},
-		{name: "source and source view", q: FeedQuery{Source: domain.SourceHackerNews, SourceView: "top"}, want: []string{hnTop.ID}},
-		{name: "search", q: FeedQuery{Search: "agent"}, want: []string{hnTop.ID, github.ID}},
-		{name: "saved search source", q: FeedQuery{Source: domain.SourceHackerNews, Search: "agent", SavedOnly: true}, want: []string{hnTop.ID}},
-		{name: "unread language tag", q: FeedQuery{UnreadOnly: true, Language: "go", Tag: "terminal"}, want: []string{hnTop.ID, github.ID}},
+		{name: "default hides hidden", q: domain.FeedQuery{}, want: []string{hnTop.ID, hnBest.ID, github.ID}},
+		{name: "include hidden", q: domain.FeedQuery{IncludeHidden: true}, want: []string{hnTop.ID, hnBest.ID, github.ID, hidden.ID}},
+		{name: "source and source view", q: domain.FeedQuery{Source: domain.SourceHackerNews, SourceView: "top"}, want: []string{hnTop.ID}},
+		{name: "search", q: domain.FeedQuery{Search: "agent"}, want: []string{hnTop.ID, github.ID}},
+		{name: "saved search source", q: domain.FeedQuery{Source: domain.SourceHackerNews, Search: "agent", SavedOnly: true}, want: []string{hnTop.ID}},
+		{name: "unread language tag", q: domain.FeedQuery{UnreadOnly: true, Language: "go", Tag: "terminal"}, want: []string{hnTop.ID, github.ID}},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -577,7 +580,7 @@ func TestStoreDedupeCandidatesRoundTripAndIgnore(t *testing.T) {
 	if err := store.UpsertFeedItems(ctx, []domain.FeedItem{first, second, unrelated}); err != nil {
 		t.Fatal(err)
 	}
-	entries, err := store.ListFeed(ctx, FeedQuery{IncludeHidden: true})
+	entries, err := store.ListFeed(ctx, domain.FeedQuery{IncludeHidden: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -990,7 +993,7 @@ func TestStoreClearCacheRemovesCachedDataAndKeepsSavedItems(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	entries, err := store.ListFeed(ctx, FeedQuery{IncludeHidden: true})
+	entries, err := store.ListFeed(ctx, domain.FeedQuery{IncludeHidden: true})
 	if err != nil {
 		t.Fatal(err)
 	}

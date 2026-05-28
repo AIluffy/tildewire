@@ -143,8 +143,7 @@ func (s *Store) backfillMissingRecommendationTerms(ctx context.Context, since ti
 	defer tx.Rollback()
 	queries := generated.New(tx)
 	for _, entry := range entries {
-		item := entry.Item
-		item.Sources = entry.Sources
+		item := entry.ItemWithSources()
 		if err := queries.DeleteItemTerms(ctx, item.ID); err != nil {
 			return err
 		}
@@ -292,7 +291,6 @@ ORDER BY i.id`, args...)
 	for idx := range entries {
 		itemID := entries[idx].Item.ID
 		entries[idx].Sources = sourcesByItem[itemID]
-		entries[idx].Item.Sources = sourcesByItem[itemID]
 		entries[idx].Item.Tags = tagsByItem[itemID]
 	}
 	return entries, nil

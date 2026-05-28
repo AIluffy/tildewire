@@ -22,16 +22,10 @@ const (
 var primaryFilterLanguages = []string{"go", "rust", "python", "typescript"}
 
 func (m *Model) openFilter() {
-	m.filterOpen = true
+	m.openOverlay(overlayFilter)
 	m.filterDraft = m.filter
 	m.filterDraftView = m.view
 	m.filterCursor = 0
-	m.detail = false
-	m.health = false
-	m.rulesOpen = false
-	m.dedupeOpen = false
-	m.recommendDiagnosticsOpen = false
-	m.paletteOpen = false
 	m.message = "filter"
 }
 

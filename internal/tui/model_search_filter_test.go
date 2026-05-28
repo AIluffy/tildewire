@@ -266,8 +266,7 @@ func TestModelHiddenSourcesAreOmittedFromSourceFilterPaletteAndHealth(t *testing
 	if strings.Contains(ansi.Strip(model.renderPalette()), "Product Hunt view") {
 		t.Fatalf("palette rendered hidden Product Hunt:\n%s", model.renderPalette())
 	}
-	model.paletteOpen = false
-	model.health = true
+	model.openOverlay(overlayHealth)
 	if strings.Contains(ansi.Strip(model.renderHealth()), "Product Hunt") {
 		t.Fatalf("health rendered hidden Product Hunt:\n%s", model.renderHealth())
 	}

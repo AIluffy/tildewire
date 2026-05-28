@@ -269,7 +269,14 @@ func lobstersEntryID(entry domain.FeedEntry) string {
 	if entry.Item.Refs.LobstersID != "" {
 		return entry.Item.Refs.LobstersID
 	}
-	for _, source := range append(entry.Sources, entry.Item.Sources...) {
+	if id := lobstersSourceID(entry.Sources); id != "" {
+		return id
+	}
+	return ""
+}
+
+func lobstersSourceID(sources []domain.ItemSource) string {
+	for _, source := range sources {
 		if source.Source == domain.SourceLobsters && source.SourceIDRaw != "" {
 			return source.SourceIDRaw
 		}

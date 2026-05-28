@@ -25,7 +25,7 @@ func (s *Service) recomputeRecommendations(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	rules, err := s.store.ListPersonalizationRules(ctx, true)
+	rules, err := s.personalization.ListPersonalizationRules(ctx, true)
 	if err != nil {
 		return err
 	}
@@ -33,7 +33,7 @@ func (s *Service) recomputeRecommendations(ctx context.Context) error {
 	entries = filterPersonalizedHidden(entries, activeRules)
 	entries = s.filterEntriesForEnabledSources(entries, domain.SourceRecommend)
 	now := time.Now().UTC()
-	profile, err := s.store.RecommendationProfile(ctx, now)
+	profile, err := s.recommendations.RecommendationProfile(ctx, now)
 	if err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func (s *Service) recomputeRecommendations(ctx context.Context) error {
 	scores := selectRecommendationScores(scoreCandidates, recommendDisplayLimit)
 	s.storeMu.Lock()
 	defer s.storeMu.Unlock()
-	return s.store.ReplaceRecommendationScores(ctx, scores)
+	return s.recommendations.ReplaceRecommendationScores(ctx, scores)
 }
 
 func (s *Service) recommendationCandidateEntries(ctx context.Context) ([]domain.FeedEntry, error) {
@@ -79,7 +79,7 @@ func (s *Service) recommendationCandidateEntries(ctx context.Context) ([]domain.
 		}
 	}
 
-	latestEntries, err := s.store.ListFeed(ctx, domain.FeedQuery{Limit: recommendLatestFeedLimit})
+	latestEntries, err := s.feeds.ListFeed(ctx, domain.FeedQuery{Limit: recommendLatestFeedLimit})
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func (s *Service) recommendationCandidateEntries(ctx context.Context) ([]domain.
 	for _, source := range s.sourceIDsSnapshot() {
 		sourceViews := s.recommendationCandidateSourceViews(source)
 		for _, sourceView := range sourceViews {
-			entries, err := s.store.ListFeed(ctx, domain.FeedQuery{
+			entries, err := s.feeds.ListFeed(ctx, domain.FeedQuery{
 				Source:     source,
 				SourceView: sourceView,
 				Limit:      recommendCandidateSourceLimit,

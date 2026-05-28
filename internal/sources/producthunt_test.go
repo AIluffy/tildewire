@@ -83,6 +83,35 @@ func TestProductHuntFetchBuildsGraphQLRequest(t *testing.T) {
 	}
 }
 
+func TestProductHuntFetchUsesAdapterLaunchLocation(t *testing.T) {
+	now := time.Date(2026, 5, 15, 1, 30, 0, 0, time.UTC)
+	var request struct {
+		Variables map[string]any `json:"variables"`
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = w.Write([]byte(productHuntFixture))
+	}))
+	defer server.Close()
+
+	adapter := ProductHuntAdapter{
+		BaseURL:  server.URL,
+		Token:    "secret-token",
+		Now:      func() time.Time { return now },
+		Location: time.FixedZone("Product Hunt Test", 2*60*60),
+	}
+	_, err := adapter.Fetch(context.Background(), domain.FetchScope{Source: domain.SourceProductHunt, View: "today", Limit: 10}, httpx.New(time.Second, newSourceTestCache()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if request.Variables["postedAfter"] != "2026-05-14T22:00:00Z" || request.Variables["postedBefore"] != "2026-05-15T22:00:00Z" {
+		t.Fatalf("date variables = %+v, want adapter launch location", request.Variables)
+	}
+}
+
 func TestProductHuntTokenConcurrentWithAuthAndFetch(t *testing.T) {
 	adapter := ProductHuntAdapter{
 		Token: "initial",
@@ -134,7 +163,7 @@ func TestProductHuntRequestUsesProductHuntLaunchDay(t *testing.T) {
 		Source: domain.SourceProductHunt,
 		View:   "today",
 		Limit:  25,
-	}, now)
+	}, now, nil)
 
 	if request.Variables.PostedAfter != "2026-05-14T07:00:00Z" || request.Variables.PostedBefore != "2026-05-15T07:00:00Z" {
 		t.Fatalf("date variables = %+v, want Product Hunt launch day in Pacific time", request.Variables)

@@ -212,7 +212,14 @@ func hnEntryID(entry domain.FeedEntry) (int, bool) {
 		id, err := strconv.Atoi(entry.Item.Refs.HNID)
 		return id, err == nil
 	}
-	for _, source := range append(entry.Sources, entry.Item.Sources...) {
+	if id, ok := hnSourceID(entry.Sources); ok {
+		return id, true
+	}
+	return 0, false
+}
+
+func hnSourceID(sources []domain.ItemSource) (int, bool) {
+	for _, source := range sources {
 		if source.Source != domain.SourceHackerNews || source.SourceIDRaw == "" {
 			continue
 		}

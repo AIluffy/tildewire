@@ -51,7 +51,7 @@ func (s *Service) ExportSaved(ctx context.Context, options ExportOptions) (Expor
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	entries, err := s.store.ListFeed(ctx, domain.FeedQuery{SavedOnly: true, IncludeHidden: true, Limit: 10000})
+	entries, err := s.feeds.ListFeed(ctx, domain.FeedQuery{SavedOnly: true, IncludeHidden: true, Limit: 10000})
 	if err != nil {
 		return ExportResult{}, err
 	}

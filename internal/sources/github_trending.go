@@ -25,7 +25,10 @@ const githubTrendingBaseURL = "https://github.com"
 const githubAPIBaseURL = "https://api.github.com"
 const githubAPIRateLimitBucket = "github_api"
 
-var starsSincePattern = regexp.MustCompile(`(?i)([\d,.]+(?:[km])?)\s+stars?\s+(?:today|this week)`)
+var (
+	starsSincePattern   = regexp.MustCompile(`(?i)([\d,.]+(?:[km])?)\s+stars?\s+(?:today|this week)`)
+	githubCountReplacer = strings.NewReplacer(",", "", " ", "")
+)
 
 // GitHubTrendingAdapter fetches GitHub Trending repository pages.
 type GitHubTrendingAdapter struct {
@@ -376,26 +379,31 @@ func starsSinceCount(text string) int64 {
 }
 
 func parseGitHubCount(raw string) (int64, bool) {
-	value := strings.ToLower(cleanText(raw))
-	value = strings.ReplaceAll(value, ",", "")
-	value = strings.ReplaceAll(value, " ", "")
+	value := normalizeGitHubCount(raw)
 	if value == "" {
 		return 0, false
 	}
-	multiplier := float64(1)
-	switch {
-	case strings.HasSuffix(value, "k"):
-		multiplier = 1000
-		value = strings.TrimSuffix(value, "k")
-	case strings.HasSuffix(value, "m"):
-		multiplier = 1000000
-		value = strings.TrimSuffix(value, "m")
-	}
+	value, multiplier := splitGitHubCountUnit(value)
 	number, err := strconv.ParseFloat(value, 64)
 	if err != nil {
 		return 0, false
 	}
 	return int64(math.Round(number * multiplier)), true
+}
+
+func normalizeGitHubCount(raw string) string {
+	return githubCountReplacer.Replace(strings.ToLower(cleanText(raw)))
+}
+
+func splitGitHubCountUnit(value string) (string, float64) {
+	switch {
+	case strings.HasSuffix(value, "k"):
+		return strings.TrimSuffix(value, "k"), 1000
+	case strings.HasSuffix(value, "m"):
+		return strings.TrimSuffix(value, "m"), 1000000
+	default:
+		return value, 1
+	}
 }
 
 func githubSubtitle(language string, stars, forks, starsSince int64, period string) string {

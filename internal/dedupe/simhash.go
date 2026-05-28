@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"math/bits"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -48,8 +49,8 @@ func ParseSimHashHex(value string) (uint64, bool) {
 	if len(value) != 16 {
 		return 0, false
 	}
-	var hash uint64
-	if _, err := fmt.Sscanf(value, "%016x", &hash); err != nil {
+	hash, err := strconv.ParseUint(value, 16, 64)
+	if err != nil {
 		return 0, false
 	}
 	return hash, true

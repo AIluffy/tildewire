@@ -6,8 +6,6 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/AIluffy/tildewire/internal/domain"
-	"github.com/AIluffy/tildewire/internal/httpcache"
 	"github.com/AIluffy/tildewire/internal/store/generated"
 )
 
@@ -22,12 +20,6 @@ const (
 	dedupeCandidateLimit     = 250
 	dedupeCandidateThreshold = 16
 )
-
-// FeedQuery controls visible feed reads.
-type FeedQuery = domain.FeedQuery
-
-// HTTPCacheEntry is a raw response cache row.
-type HTTPCacheEntry = httpcache.Entry
 
 // Open opens a SQLite database file.
 func Open(ctx context.Context, path string) (*Store, error) {

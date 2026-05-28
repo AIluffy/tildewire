@@ -41,7 +41,7 @@ func TestModelHealthRetryStartsForcedVisibleRefresh(t *testing.T) {
 	service := &fakeService{snapshot: tuiSnapshot(false)}
 	model := NewModel(service, tuiSnapshot(false))
 	model.refreshing = false
-	model.health = true
+	model.openOverlay(overlayHealth)
 	model.lastError = "network down"
 
 	updated, cmd := model.Update(keyPress("r"))

@@ -9,7 +9,7 @@ import (
 )
 
 // CountFeed returns the number of items matching the feed query without applying a page limit.
-func (s *Store) CountFeed(ctx context.Context, query FeedQuery) (int, error) {
+func (s *Store) CountFeed(ctx context.Context, query domain.FeedQuery) (int, error) {
 	normalized, ok := normalizeFeedQueryForStore(query)
 	if !ok {
 		return 0, nil

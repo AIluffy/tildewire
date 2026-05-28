@@ -22,43 +22,22 @@ type ruleDraft struct {
 }
 
 func (m *Model) openRulesPanel() {
-	m.rulesOpen = true
+	m.openOverlay(overlayRules)
 	m.ruleCursor = clamp(m.ruleCursor, 0, max(0, len(m.rules)-1))
-	m.detail = false
-	m.filterOpen = false
-	m.health = false
-	m.dedupeOpen = false
-	m.recommendDiagnosticsOpen = false
-	m.ruleForm = nil
-	m.paletteOpen = false
 	m.message = "personalization rules"
 }
 
 func (m *Model) openDedupePanel() {
-	m.dedupeOpen = true
+	m.openOverlay(overlayDedupe)
 	m.dedupeCursor = clamp(m.dedupeCursor, 0, max(0, len(m.dedupeCandidates)-1))
-	m.detail = false
-	m.filterOpen = false
-	m.health = false
-	m.rulesOpen = false
-	m.recommendDiagnosticsOpen = false
-	m.ruleForm = nil
-	m.paletteOpen = false
 	m.message = "dedupe candidates"
 }
 
 func (m *Model) openRecommendDiagnosticsPanel() {
-	m.recommendDiagnosticsOpen = true
+	m.openOverlay(overlayRecommendDiagnostics)
 	m.recommendDiagnosticsLoading = true
 	m.recommendDiagnostics = domain.RecommendationDiagnostics{}
 	m.recommendDiagnosticsError = ""
-	m.detail = false
-	m.filterOpen = false
-	m.health = false
-	m.rulesOpen = false
-	m.dedupeOpen = false
-	m.ruleForm = nil
-	m.paletteOpen = false
 	m.message = "recommend diagnostics"
 }
 
@@ -70,7 +49,7 @@ func (m Model) handleRulesKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.help.ShowAll = !m.help.ShowAll
 		return m, nil
 	case key.Matches(msg, m.keys.Back):
-		m.rulesOpen = false
+		m.closeOverlay()
 		return m, nil
 	}
 	switch msg.String() {
@@ -106,7 +85,7 @@ func (m Model) handleDedupeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.help.ShowAll = !m.help.ShowAll
 		return m, nil
 	case key.Matches(msg, m.keys.Back):
-		m.dedupeOpen = false
+		m.closeOverlay()
 		return m, nil
 	}
 	switch msg.String() {
@@ -124,8 +103,7 @@ func (m Model) handleDedupeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleRuleFormKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Back) {
-		m.ruleForm = nil
-		m.ruleEditingID = 0
+		m.closeOverlay()
 		m.message = "rule cancelled"
 		return m, nil
 	}
@@ -148,16 +126,14 @@ func (m Model) applyRuleFormState(cmd tea.Cmd) (tea.Model, tea.Cmd) {
 			m.message = "rule invalid"
 			return m, cmd
 		}
-		m.ruleForm = nil
 		id := m.ruleEditingID
-		m.ruleEditingID = 0
+		m.closeOverlay()
 		if id > 0 {
 			return m, tea.Batch(cmd, m.updateRuleCmd(id, rule))
 		}
 		return m, tea.Batch(cmd, m.createRuleCmd(rule))
 	case huh.StateAborted:
-		m.ruleForm = nil
-		m.ruleEditingID = 0
+		m.closeOverlay()
 		m.message = "rule cancelled"
 		return m, cmd
 	default:
@@ -172,11 +148,7 @@ func (m *Model) openRuleForm(id int64, rule domain.PersonalizationRule) {
 	if id > 0 {
 		title = "Edit personalization rule"
 	}
-	m.detail = false
-	m.filterOpen = false
-	m.health = false
-	m.dedupeOpen = false
-	m.paletteOpen = false
+	m.openOverlay(overlayRuleForm)
 	m.message = strings.ToLower(title)
 	m.ruleForm = huh.NewForm(
 		huh.NewGroup(

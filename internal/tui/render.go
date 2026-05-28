@@ -50,31 +50,24 @@ func (m Model) render() string {
 	if m.height < 12 {
 		m.height = 12
 	}
-	if m.settingsOpen {
+	switch m.activeOverlay() {
+	case overlaySettings:
 		return m.renderSettings()
-	}
-	if m.ruleForm != nil {
+	case overlayRuleForm:
 		return m.renderRuleForm()
-	}
-	if m.filterOpen {
+	case overlayFilter:
 		return m.renderFilter()
-	}
-	if m.paletteOpen {
+	case overlayPalette:
 		return m.renderPalette()
-	}
-	if m.rulesOpen {
+	case overlayRules:
 		return m.renderRules()
-	}
-	if m.dedupeOpen {
+	case overlayDedupe:
 		return m.renderDedupeCandidates()
-	}
-	if m.recommendDiagnosticsOpen {
+	case overlayRecommendDiagnostics:
 		return m.renderRecommendDiagnostics()
-	}
-	if m.health {
+	case overlayHealth:
 		return m.renderHealth()
-	}
-	if m.detail {
+	case overlayDetail:
 		return m.renderDetail()
 	}
 	layout := m.mainLayout()

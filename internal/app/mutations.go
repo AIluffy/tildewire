@@ -8,12 +8,12 @@ import (
 
 // ClearCache removes refreshable cached data and returns the updated visible snapshot.
 func (s *Service) ClearCache(ctx context.Context, view domain.SourceID, filter FeedFilter) (Snapshot, error) {
-	return s.reloadAfter(ctx, view, filter, s.store.ClearCache)
+	return s.reloadAfter(ctx, view, filter, s.cache.ClearCache)
 }
 
 // SetSaved toggles saved state.
 func (s *Service) SetSaved(ctx context.Context, itemID string, saved bool) error {
-	if err := s.store.SetSaved(ctx, itemID, saved); err != nil {
+	if err := s.items.SetSaved(ctx, itemID, saved); err != nil {
 		return err
 	}
 	s.markRecommendationsDirty()
@@ -22,7 +22,7 @@ func (s *Service) SetSaved(ctx context.Context, itemID string, saved bool) error
 
 // SetRead toggles read state.
 func (s *Service) SetRead(ctx context.Context, itemID string, read bool) error {
-	if err := s.store.SetRead(ctx, itemID, read); err != nil {
+	if err := s.items.SetRead(ctx, itemID, read); err != nil {
 		return err
 	}
 	s.markRecommendationsDirty()
@@ -31,7 +31,7 @@ func (s *Service) SetRead(ctx context.Context, itemID string, read bool) error {
 
 // SetHidden toggles hidden state.
 func (s *Service) SetHidden(ctx context.Context, itemID string, hidden bool) error {
-	if err := s.store.SetHidden(ctx, itemID, hidden); err != nil {
+	if err := s.items.SetHidden(ctx, itemID, hidden); err != nil {
 		return err
 	}
 	s.markRecommendationsDirty()
@@ -40,7 +40,7 @@ func (s *Service) SetHidden(ctx context.Context, itemID string, hidden bool) err
 
 // RecordItemEvent records an explicit local interaction for future recommendations.
 func (s *Service) RecordItemEvent(ctx context.Context, event domain.ItemEvent) error {
-	if err := s.store.RecordItemEvent(ctx, event); err != nil {
+	if err := s.items.RecordItemEvent(ctx, event); err != nil {
 		return err
 	}
 	s.markRecommendationsDirty()
@@ -50,7 +50,7 @@ func (s *Service) RecordItemEvent(ctx context.Context, event domain.ItemEvent) e
 // CreatePersonalizationRule persists a rule and reloads the current feed.
 func (s *Service) CreatePersonalizationRule(ctx context.Context, rule domain.PersonalizationRule, view domain.SourceID, filter FeedFilter) (Snapshot, error) {
 	return s.reloadAfter(ctx, view, filter, func(ctx context.Context) error {
-		_, err := s.store.CreatePersonalizationRule(ctx, rule)
+		_, err := s.personalization.CreatePersonalizationRule(ctx, rule)
 		return err
 	})
 }
@@ -58,7 +58,7 @@ func (s *Service) CreatePersonalizationRule(ctx context.Context, rule domain.Per
 // UpdatePersonalizationRule replaces a rule and reloads the current feed.
 func (s *Service) UpdatePersonalizationRule(ctx context.Context, id int64, rule domain.PersonalizationRule, view domain.SourceID, filter FeedFilter) (Snapshot, error) {
 	return s.reloadAfter(ctx, view, filter, func(ctx context.Context) error {
-		_, err := s.store.UpdatePersonalizationRule(ctx, id, rule)
+		_, err := s.personalization.UpdatePersonalizationRule(ctx, id, rule)
 		return err
 	})
 }
@@ -66,21 +66,21 @@ func (s *Service) UpdatePersonalizationRule(ctx context.Context, id int64, rule 
 // SetPersonalizationRuleEnabled toggles a rule and reloads the current feed.
 func (s *Service) SetPersonalizationRuleEnabled(ctx context.Context, id int64, enabled bool, view domain.SourceID, filter FeedFilter) (Snapshot, error) {
 	return s.reloadAfter(ctx, view, filter, func(ctx context.Context) error {
-		return s.store.SetPersonalizationRuleEnabled(ctx, id, enabled)
+		return s.personalization.SetPersonalizationRuleEnabled(ctx, id, enabled)
 	})
 }
 
 // DeletePersonalizationRule removes a rule and reloads the current feed.
 func (s *Service) DeletePersonalizationRule(ctx context.Context, id int64, view domain.SourceID, filter FeedFilter) (Snapshot, error) {
 	return s.reloadAfter(ctx, view, filter, func(ctx context.Context) error {
-		return s.store.DeletePersonalizationRule(ctx, id)
+		return s.personalization.DeletePersonalizationRule(ctx, id)
 	})
 }
 
 // IgnoreDedupeCandidate hides a duplicate suggestion and reloads the current feed.
 func (s *Service) IgnoreDedupeCandidate(ctx context.Context, key string, view domain.SourceID, filter FeedFilter) (Snapshot, error) {
 	return s.reloadAfter(ctx, view, filter, func(ctx context.Context) error {
-		return s.store.IgnoreDedupeCandidate(ctx, key)
+		return s.dedupe.IgnoreDedupeCandidate(ctx, key)
 	})
 }
 

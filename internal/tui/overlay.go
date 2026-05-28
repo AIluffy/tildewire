@@ -19,40 +19,54 @@ const (
 )
 
 func (m Model) activeOverlay() overlayMode {
-	switch {
-	case m.settingsOpen:
-		return overlaySettings
-	case m.ruleForm != nil:
-		return overlayRuleForm
-	case m.paletteOpen:
-		return overlayPalette
-	case m.filterOpen:
-		return overlayFilter
-	case m.rulesOpen:
-		return overlayRules
-	case m.dedupeOpen:
-		return overlayDedupe
-	case m.recommendDiagnosticsOpen:
-		return overlayRecommendDiagnostics
-	case m.health:
-		return overlayHealth
-	case m.mode == inputModeSearch:
+	if m.mode == inputModeSearch {
 		return overlaySearch
-	case m.detail:
+	}
+	return m.overlay
+}
+
+func (m Model) activeMouseOverlay() overlayMode {
+	switch m.overlay {
+	case overlaySettings:
+		return overlaySettings
+	case overlayDetail:
 		return overlayDetail
 	default:
 		return overlayNone
 	}
 }
 
-func (m Model) activeMouseOverlay() overlayMode {
-	switch {
-	case m.settingsOpen:
-		return overlaySettings
-	case m.detail:
-		return overlayDetail
+func (m Model) hasBlockingOverlay() bool {
+	switch m.activeOverlay() {
+	case overlayNone, overlaySearch:
+		return false
 	default:
-		return overlayNone
+		return true
+	}
+}
+
+func (m Model) overlayIs(mode overlayMode) bool {
+	return m.activeOverlay() == mode
+}
+
+func (m *Model) openOverlay(mode overlayMode) {
+	m.closeOverlayStateFor(mode)
+	m.overlay = mode
+}
+
+func (m *Model) closeOverlay() {
+	m.closeOverlayStateFor(overlayNone)
+	m.overlay = overlayNone
+}
+
+func (m *Model) closeOverlayStateFor(next overlayMode) {
+	if next != overlaySettings {
+		m.settingsForm = nil
+		m.settingsScrollOffset = 0
+	}
+	if next != overlayRuleForm {
+		m.ruleForm = nil
+		m.ruleEditingID = 0
 	}
 }
 

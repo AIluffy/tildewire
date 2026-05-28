@@ -13,12 +13,12 @@ const recommendDiagnosticsProfileTermLimit = 8
 
 // RecommendationDiagnostics explains the current local Recommend profile and selected item.
 func (s *Service) RecommendationDiagnostics(ctx context.Context, selected domain.FeedEntry) (domain.RecommendationDiagnostics, error) {
-	rules, err := s.store.ListPersonalizationRules(ctx, true)
+	rules, err := s.personalization.ListPersonalizationRules(ctx, true)
 	if err != nil {
 		return domain.RecommendationDiagnostics{}, err
 	}
 	now := time.Now().UTC()
-	profile, err := s.store.RecommendationProfile(ctx, now)
+	profile, err := s.recommendations.RecommendationProfile(ctx, now)
 	if err != nil {
 		return domain.RecommendationDiagnostics{}, err
 	}
@@ -70,7 +70,6 @@ func (s *Service) recommendationDiagnosticsForEntry(entry domain.FeedEntry, rule
 			exclusion = domain.RecommendationExclusionDisabledSource
 		}
 		entry.Sources = filteredSources
-		entry.Item.Sources = filteredSources
 	}
 
 	interestScore, hasPositiveSignal, reasons := recommendationInterestScore(entry, rules, profile)

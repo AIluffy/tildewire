@@ -52,7 +52,7 @@ func TestModelPaletteOpensRecommendDiagnostics(t *testing.T) {
 func TestModelRecommendDiagnosticsEmptyAndNarrowRender(t *testing.T) {
 	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false))
 	model.width = 42
-	model.recommendDiagnosticsOpen = true
+	model.openOverlay(overlayRecommendDiagnostics)
 	model.recommendDiagnostics = domain.RecommendationDiagnostics{}
 
 	rendered := ansi.Strip(model.render())
@@ -71,7 +71,7 @@ func TestModelRecommendDiagnosticsEmptyAndNarrowRender(t *testing.T) {
 func TestModelRecommendDiagnosticsKeys(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
-	model.recommendDiagnosticsOpen = true
+	model.openOverlay(overlayRecommendDiagnostics)
 
 	updated, cmd := model.Update(keyPress("?"))
 	model = updated.(Model)
@@ -87,11 +87,11 @@ func TestModelRecommendDiagnosticsKeys(t *testing.T) {
 	if cmd != nil {
 		t.Fatal("esc should not run command")
 	}
-	if model.recommendDiagnosticsOpen {
+	if model.overlay == overlayRecommendDiagnostics {
 		t.Fatal("esc should close diagnostics")
 	}
 
-	model.recommendDiagnosticsOpen = true
+	model.openOverlay(overlayRecommendDiagnostics)
 	_, cmd = model.Update(keyPress("q"))
 	if cmd == nil {
 		t.Fatal("q should quit diagnostics panel")

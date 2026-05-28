@@ -90,8 +90,7 @@ func recommendationProfileMatches(entry domain.FeedEntry, profile domain.Recomme
 	if len(profile.Terms) == 0 {
 		return 0, 0, nil, nil
 	}
-	item := entry.Item
-	item.Sources = entry.Sources
+	item := entry.ItemWithSources()
 	otherPositive := 0.0
 	sourcePositive := 0.0
 	otherNegative := 0.0

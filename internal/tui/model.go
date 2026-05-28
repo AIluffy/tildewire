@@ -174,10 +174,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
-	if m.settingsOpen && m.settingsForm != nil {
+	if m.overlayIs(overlaySettings) && m.settingsForm != nil {
 		return m.updateSettingsForm(msg)
 	}
-	if m.ruleForm != nil {
+	if m.overlayIs(overlayRuleForm) && m.ruleForm != nil {
 		return m.updateRuleForm(msg)
 	}
 	return m, nil
@@ -195,7 +195,7 @@ func (m Model) handleWindowSizeMsg(msg tea.WindowSizeMsg) (Model, tea.Cmd) {
 	if m.images != nil {
 		imageCmd = batchCommands(imageCmd, m.images.OnResize(msg.Width, msg.Height))
 	}
-	if m.settingsOpen && m.settingsForm != nil {
+	if m.overlayIs(overlaySettings) && m.settingsForm != nil {
 		m.resizeSettingsForm(msg.Width, msg.Height)
 		updated, cmd := m.settingsForm.Update(msg)
 		if form, ok := updated.(*huh.Form); ok {
@@ -204,7 +204,7 @@ func (m Model) handleWindowSizeMsg(msg tea.WindowSizeMsg) (Model, tea.Cmd) {
 		m.ensureSettingsFocusedFieldVisible()
 		return m, cmd
 	}
-	if m.ruleForm != nil {
+	if m.overlayIs(overlayRuleForm) && m.ruleForm != nil {
 		m.ruleForm.WithWidth(max(40, msg.Width-4)).WithHeight(max(8, msg.Height-4))
 		updated, cmd := m.ruleForm.Update(msg)
 		if form, ok := updated.(*huh.Form); ok {
@@ -259,7 +259,7 @@ func (m Model) handleItemStatePatchMsg(msg itemStatePatchMsg) (Model, tea.Cmd) {
 	}
 	m.patchEntryState(msg)
 	m.clearDetailContentCache()
-	if m.detail {
+	if m.overlayIs(overlayDetail) {
 		m.refreshDetailContentCache()
 	}
 	return m, nil
@@ -438,10 +438,10 @@ func (m Model) handleMouseClickMsg(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleMouseWheelMsg(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
-	if m.settingsOpen {
+	if m.overlayIs(overlaySettings) {
 		return m.handleSettingsMouseWheel(msg)
 	}
-	if m.detail {
+	if m.overlayIs(overlayDetail) {
 		return m.handleDetailMouseWheel(msg)
 	}
 	if m.mainPanelsVisible() {
@@ -480,7 +480,9 @@ func (m *Model) applySnapshot(snapshot app.Snapshot) {
 	m.restoreFeedSelection()
 	m.clampSourcesOffset()
 	if len(m.entries) == 0 {
-		m.detail = false
+		if m.overlayIs(overlayDetail) {
+			m.closeOverlay()
+		}
 		m.detailLoading = false
 		m.detailEntryID = ""
 		m.itemDetail = domain.ItemDetail{}
@@ -496,7 +498,7 @@ func (m *Model) applySnapshot(snapshot app.Snapshot) {
 		m.resetPreviewScroll()
 	}
 	m.rememberFeedSelection()
-	if m.detail {
+	if m.overlayIs(overlayDetail) {
 		m.refreshDetailContentCache()
 		m.clampDetailOffset()
 	}
@@ -571,5 +573,5 @@ func mergeBackgroundCounts(current, incoming map[domain.SourceID]int, active dom
 }
 
 func (m Model) mainPanelsVisible() bool {
-	return !m.settingsOpen && m.ruleForm == nil && !m.filterOpen && !m.health && !m.rulesOpen && !m.dedupeOpen && !m.detail && !m.paletteOpen
+	return !m.hasBlockingOverlay()
 }

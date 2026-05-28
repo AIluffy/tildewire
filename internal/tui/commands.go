@@ -108,26 +108,13 @@ func (m Model) setSavedCmd(itemID string, saved bool) tea.Cmd {
 	if saved {
 		message = "item saved"
 	}
-	if m.canPatchSavedState() {
-		return func() tea.Msg {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			err := m.service.SetSaved(ctx, itemID, saved)
-			return itemStatePatchMsg{itemID: itemID, saved: &saved, err: err, message: message}
-		}
-	}
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := m.service.SetSaved(ctx, itemID, saved); err != nil {
-			return statusMsg{message: "item state failed", err: err}
-		}
-		snapshot, err := m.service.LoadFeed(ctx, m.view, m.filter)
-		if err != nil {
-			snapshot = m.currentSnapshot()
-		}
-		return snapshotMsg{snapshot: snapshot, err: err, message: message}
-	}
+	return m.setItemStateCmd(
+		itemID,
+		message,
+		m.canPatchSavedState,
+		func(ctx context.Context, itemID string) error { return m.service.SetSaved(ctx, itemID, saved) },
+		func(msg *itemStatePatchMsg) { msg.saved = &saved },
+	)
 }
 
 func (m Model) setReadCmd(itemID string, read bool) tea.Cmd {
@@ -135,26 +122,13 @@ func (m Model) setReadCmd(itemID string, read bool) tea.Cmd {
 	if read {
 		message = "item marked read"
 	}
-	if m.canPatchReadState() {
-		return func() tea.Msg {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			err := m.service.SetRead(ctx, itemID, read)
-			return itemStatePatchMsg{itemID: itemID, read: &read, err: err, message: message}
-		}
-	}
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := m.service.SetRead(ctx, itemID, read); err != nil {
-			return statusMsg{message: "item state failed", err: err}
-		}
-		snapshot, err := m.service.LoadFeed(ctx, m.view, m.filter)
-		if err != nil {
-			snapshot = m.currentSnapshot()
-		}
-		return snapshotMsg{snapshot: snapshot, err: err, message: message}
-	}
+	return m.setItemStateCmd(
+		itemID,
+		message,
+		m.canPatchReadState,
+		func(ctx context.Context, itemID string) error { return m.service.SetRead(ctx, itemID, read) },
+		func(msg *itemStatePatchMsg) { msg.read = &read },
+	)
 }
 
 func (m Model) canPatchSavedState() bool {
@@ -188,18 +162,29 @@ func (m Model) setHiddenCmd(itemID string, hidden bool) tea.Cmd {
 	if hidden {
 		message = "item hidden"
 	}
-	if m.canPatchHiddenState() {
+	return m.setItemStateCmd(
+		itemID,
+		message,
+		m.canPatchHiddenState,
+		func(ctx context.Context, itemID string) error { return m.service.SetHidden(ctx, itemID, hidden) },
+		func(msg *itemStatePatchMsg) { msg.hidden = &hidden },
+	)
+}
+
+func (m Model) setItemStateCmd(itemID string, message string, canPatch func() bool, mutate func(context.Context, string) error, patch func(*itemStatePatchMsg)) tea.Cmd {
+	if canPatch() {
 		return func() tea.Msg {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			err := m.service.SetHidden(ctx, itemID, hidden)
-			return itemStatePatchMsg{itemID: itemID, hidden: &hidden, err: err, message: message}
+			msg := itemStatePatchMsg{itemID: itemID, err: mutate(ctx, itemID), message: message}
+			patch(&msg)
+			return msg
 		}
 	}
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := m.service.SetHidden(ctx, itemID, hidden); err != nil {
+		if err := mutate(ctx, itemID); err != nil {
 			return statusMsg{message: "item state failed", err: err}
 		}
 		snapshot, err := m.service.LoadFeed(ctx, m.view, m.filter)

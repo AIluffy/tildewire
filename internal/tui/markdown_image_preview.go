@@ -47,7 +47,7 @@ func newTerminalMarkdownImagePreviewer(cacheDir string) markdownImagePreviewer {
 }
 
 func (m *Model) queueDetailImagePreviewCmds() tea.Cmd {
-	if !m.detail || normalizeMarkdownImagePreviewMode(m.config.MarkdownImagePreview) == config.MarkdownImagePreviewOff {
+	if !m.overlayIs(overlayDetail) || normalizeMarkdownImagePreviewMode(m.config.MarkdownImagePreview) == config.MarkdownImagePreviewOff {
 		return nil
 	}
 	section, ok := githubreadme.Section(m.itemDetail)
@@ -188,7 +188,7 @@ func (m Model) detailRawImageDrawSequence() string {
 }
 
 func (m Model) visibleDetailRawImageDraws() []detailRawImageDraw {
-	if !m.detail {
+	if !m.overlayIs(overlayDetail) {
 		return nil
 	}
 	width := m.detailContentWidth()

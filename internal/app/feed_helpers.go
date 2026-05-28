@@ -14,15 +14,15 @@ func (s *Service) preferenceProfileForView(ctx context.Context, view domain.Sour
 	if view != "" && view != domain.SourceAll && view != domain.SourceRecommend {
 		return domain.PreferenceProfile{}, nil
 	}
-	return s.store.PreferenceProfile(ctx)
+	return s.personalization.PreferenceProfile(ctx)
 }
 
 func (s *Service) sourceTabCounts(ctx context.Context) (map[domain.SourceID]int, error) {
-	storedCounts, err := s.store.SourceCounts(ctx)
+	storedCounts, err := s.feeds.SourceCounts(ctx)
 	if err != nil {
 		return nil, err
 	}
-	sourceViewCounts, err := s.store.SourceViewCounts(ctx)
+	sourceViewCounts, err := s.feeds.SourceViewCounts(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +42,7 @@ func (s *Service) sourceTabCounts(ctx context.Context) (map[domain.SourceID]int,
 		}
 		counts[source] = total
 	}
-	recommendCount, err := s.store.CountRecommendedFeed(ctx, domain.FeedQuery{})
+	recommendCount, err := s.feeds.CountRecommendedFeed(ctx, domain.FeedQuery{})
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,6 @@ func (s *Service) filterEntriesForEnabledSources(entries []domain.FeedEntry, vie
 			continue
 		}
 		entry.Sources = sources
-		entry.Item.Sources = sources
 		filtered = append(filtered, entry)
 	}
 	return filtered

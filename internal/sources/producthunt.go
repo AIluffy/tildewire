@@ -24,14 +24,18 @@ var ErrProductHuntAuthRequired = errors.New("auth required: PRODUCT_HUNT_TOKEN i
 
 const productHuntAuthRequiredMessage = "PRODUCT_HUNT_TOKEN is not set"
 
-var productHuntLocation = loadProductHuntLocation()
+var (
+	productHuntLocationOnce sync.Once
+	productHuntLocation     *time.Location
+)
 
 // ProductHuntAdapter fetches featured Product Hunt posts through the GraphQL API.
 type ProductHuntAdapter struct {
-	BaseURL string
-	Token   string
-	Now     func() time.Time
-	tokenMu sync.RWMutex
+	BaseURL  string
+	Token    string
+	Now      func() time.Time
+	Location *time.Location
+	tokenMu  sync.RWMutex
 }
 
 // NewProductHuntAdapter creates the Product Hunt source adapter.
@@ -74,7 +78,7 @@ func (a *ProductHuntAdapter) Fetch(ctx context.Context, scope domain.FetchScope,
 		return nil, ErrProductHuntAuthRequired
 	}
 	scope = normalizeProductHuntScope(scope)
-	body, err := json.Marshal(productHuntRequest(scope, a.now()))
+	body, err := json.Marshal(productHuntRequest(scope, a.now(), a.launchLocation()))
 	if err != nil {
 		return nil, err
 	}
@@ -160,6 +164,13 @@ func (a *ProductHuntAdapter) now() time.Time {
 	return time.Now().UTC()
 }
 
+func (a *ProductHuntAdapter) launchLocation() *time.Location {
+	if a.Location != nil {
+		return a.Location
+	}
+	return productHuntLaunchLocation()
+}
+
 func (a *ProductHuntAdapter) token() string {
 	a.tokenMu.RLock()
 	defer a.tokenMu.RUnlock()
@@ -177,8 +188,8 @@ type productHuntQueryVariables struct {
 	PostedBefore string `json:"postedBefore"`
 }
 
-func productHuntRequest(scope domain.FetchScope, now time.Time) productHuntGraphQLRequest {
-	after, before := productHuntWindow(scope, now)
+func productHuntRequest(scope domain.FetchScope, now time.Time, location *time.Location) productHuntGraphQLRequest {
+	after, before := productHuntWindow(scope, now, location)
 	return productHuntGraphQLRequest{
 		Query: productHuntPostsQuery,
 		Variables: productHuntQueryVariables{
@@ -189,14 +200,24 @@ func productHuntRequest(scope domain.FetchScope, now time.Time) productHuntGraph
 	}
 }
 
-func productHuntWindow(scope domain.FetchScope, now time.Time) (time.Time, time.Time) {
-	launchDay := now.In(productHuntLocation)
-	day := time.Date(launchDay.Year(), launchDay.Month(), launchDay.Day(), 0, 0, 0, 0, productHuntLocation)
+func productHuntWindow(scope domain.FetchScope, now time.Time, location *time.Location) (time.Time, time.Time) {
+	if location == nil {
+		location = productHuntLaunchLocation()
+	}
+	launchDay := now.In(location)
+	day := time.Date(launchDay.Year(), launchDay.Month(), launchDay.Day(), 0, 0, 0, 0, location)
 	before := day.AddDate(0, 0, 1)
 	if scope.View == "weekly" {
 		return day.AddDate(0, 0, -7).UTC(), before.UTC()
 	}
 	return day.UTC(), before.UTC()
+}
+
+func productHuntLaunchLocation() *time.Location {
+	productHuntLocationOnce.Do(func() {
+		productHuntLocation = loadProductHuntLocation()
+	})
+	return productHuntLocation
 }
 
 func loadProductHuntLocation() *time.Location {

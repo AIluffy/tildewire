@@ -197,9 +197,45 @@ type requestOptions struct {
 	JSON            bool
 }
 
+type requestState struct {
+	source       string
+	ttl          time.Duration
+	maxBodyBytes int64
+	cache        httpcache.Store
+	key          string
+	now          time.Time
+	cached       httpcache.Entry
+	hasCache     bool
+}
+
 func (c *Client) doRequest(ctx context.Context, options requestOptions) (Response, error) {
+	state, err := c.prepareRequest(ctx, options)
+	if err != nil {
+		return Response{}, err
+	}
+	if resp, ok := state.freshCacheResponse(options.ForceRefresh); ok {
+		return resp, nil
+	}
+	cooldownResp, err := c.responseDuringCooldown(ctx, state, options.URL)
+	if err != nil {
+		return Response{}, err
+	}
+	if cooldownResp != nil {
+		return *cooldownResp, nil
+	}
+	limitedResp, err := c.waitForRequestSlot(ctx, state, options.RateLimitBucket)
+	if err != nil {
+		return Response{}, err
+	}
+	if limitedResp != nil {
+		return *limitedResp, nil
+	}
+	return c.executeRequest(ctx, options, state)
+}
+
+func (c *Client) prepareRequest(ctx context.Context, options requestOptions) (requestState, error) {
 	if strings.TrimSpace(options.URL) == "" {
-		return Response{}, fmt.Errorf("url is required")
+		return requestState{}, fmt.Errorf("url is required")
 	}
 	source := options.Source
 	if source == "" {
@@ -219,50 +255,57 @@ func (c *Client) doRequest(ctx context.Context, options requestOptions) (Respons
 
 	cached, hasCache, err := c.loadCacheEntry(ctx, cache, key, ttl)
 	if err != nil {
-		return Response{}, err
+		return requestState{}, err
 	}
-	if hasCache && !options.ForceRefresh && cached.ExpiresAt.After(now) {
-		return responseFromCache(cached, false, ""), nil
-	}
-	if resp, ok, err := c.responseDuringCooldown(ctx, cache, source, key, options.URL, cached, hasCache, now); ok || err != nil {
-		return resp, err
-	}
-	if err := c.waitForLimiter(ctx, limiterKey(source, options.RateLimitBucket)); err != nil {
-		if hasCache {
-			return responseFromCache(cached, true, StaleReasonRateLimited), nil
-		}
-		return Response{}, fmt.Errorf("%w: %v", ErrRateLimited, err)
-	}
+	return requestState{
+		source:       source,
+		ttl:          ttl,
+		maxBodyBytes: maxBodyBytes,
+		cache:        cache,
+		key:          key,
+		now:          now,
+		cached:       cached,
+		hasCache:     hasCache,
+	}, nil
+}
 
+func (state requestState) freshCacheResponse(forceRefresh bool) (Response, bool) {
+	if state.hasCache && !forceRefresh && state.cached.ExpiresAt.After(state.now) {
+		return responseFromCache(state.cached, false, ""), true
+	}
+	return Response{}, false
+}
+
+func (c *Client) executeRequest(ctx context.Context, options requestOptions, state requestState) (Response, error) {
 	req, err := newRequest(ctx, options)
 	if err != nil {
 		return Response{}, err
 	}
-	applyRequestHeaders(req, options, cached, hasCache)
+	applyRequestHeaders(req, options, state.cached, state.hasCache)
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		if hasCache {
-			return responseFromCache(cached, true, StaleReasonNetworkError), nil
+		if state.hasCache {
+			return responseFromCache(state.cached, true, StaleReasonNetworkError), nil
 		}
 		return Response{}, err
 	}
 	defer resp.Body.Close()
 
-	body, err := readLimitedBody(resp.Body, maxBodyBytes)
+	body, err := readLimitedBody(resp.Body, state.maxBodyBytes)
 	if err != nil {
-		if hasCache {
-			return responseFromCache(cached, true, StaleReasonNetworkError), nil
+		if state.hasCache {
+			return responseFromCache(state.cached, true, StaleReasonNetworkError), nil
 		}
 		return Response{}, err
 	}
-	if options.Conditional && resp.StatusCode == http.StatusNotModified && hasCache {
-		return c.extendCacheEntry(ctx, cache, cached, resp.Header, ttl)
+	if options.Conditional && resp.StatusCode == http.StatusNotModified && state.hasCache {
+		return c.extendCacheEntry(ctx, state.cache, state.cached, resp.Header, state.ttl)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return c.handleHTTPError(ctx, cache, source, key, options.URL, resp, cached, hasCache)
+		return c.handleHTTPError(ctx, state.cache, state.source, state.key, options.URL, resp, state.cached, state.hasCache)
 	}
-	return c.storeResponse(ctx, cache, key, source, options.Method, options.URL, body, resp.Header, resp.StatusCode, ttl)
+	return c.storeResponse(ctx, state.cache, state.key, state.source, options.Method, options.URL, body, resp.Header, resp.StatusCode, state.ttl)
 }
 
 func requestCacheKey(options requestOptions) string {
@@ -283,22 +326,23 @@ func (c *Client) loadCacheEntry(ctx context.Context, cache httpcache.Store, key 
 	return c.cacheEntryWithTTL(entry, ttl), ok, nil
 }
 
-func (c *Client) responseDuringCooldown(ctx context.Context, cache httpcache.Store, source, key, url string, cached httpcache.Entry, hasCache bool, now time.Time) (Response, bool, error) {
-	cooldowns, ok := cache.(httpcache.CooldownStore)
+func (c *Client) responseDuringCooldown(ctx context.Context, state requestState, url string) (*Response, error) {
+	cooldowns, ok := state.cache.(httpcache.CooldownStore)
 	if !ok {
-		return Response{}, false, nil
+		return nil, nil
 	}
-	cooldownUntil, ok, err := cooldowns.RateLimitCooldown(ctx, source, key)
+	cooldownUntil, ok, err := cooldowns.RateLimitCooldown(ctx, state.source, state.key)
 	if err != nil {
-		return Response{}, false, fmt.Errorf("load rate-limit cooldown: %w", err)
+		return nil, fmt.Errorf("load rate-limit cooldown: %w", err)
 	}
-	if !ok || !cooldownUntil.After(now) {
-		return Response{}, false, nil
+	if !ok || !cooldownUntil.After(state.now) {
+		return nil, nil
 	}
-	if hasCache {
-		return responseFromCache(cached, true, StaleReasonRateLimited), true, nil
+	if state.hasCache {
+		resp := responseFromCache(state.cached, true, StaleReasonRateLimited)
+		return &resp, nil
 	}
-	return Response{}, true, fmt.Errorf("%w: http 429 cooldown until %s for %s", ErrRateLimited, cooldownUntil.Format(time.RFC3339), url)
+	return nil, fmt.Errorf("%w: http 429 cooldown until %s for %s", ErrRateLimited, cooldownUntil.Format(time.RFC3339), url)
 }
 
 func limiterKey(source, bucket string) string {
@@ -316,6 +360,17 @@ func (c *Client) waitForLimiter(ctx context.Context, key string) error {
 		return nil
 	}
 	return limiter.Wait(ctx)
+}
+
+func (c *Client) waitForRequestSlot(ctx context.Context, state requestState, bucket string) (*Response, error) {
+	if err := c.waitForLimiter(ctx, limiterKey(state.source, bucket)); err != nil {
+		if state.hasCache {
+			resp := responseFromCache(state.cached, true, StaleReasonRateLimited)
+			return &resp, nil
+		}
+		return nil, fmt.Errorf("%w: %v", ErrRateLimited, err)
+	}
+	return nil, nil
 }
 
 func newRequest(ctx context.Context, options requestOptions) (*retryablehttp.Request, error) {

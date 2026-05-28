@@ -145,11 +145,13 @@ func TestEnsureRecommendationsKeepsDirtyMarkFromConcurrentMutation(t *testing.T)
 	replaceStarted := make(chan struct{})
 	releaseReplace := make(chan struct{})
 	blockingStore := &blockingRecommendationStore{
-		Store:          db,
-		started:        replaceStarted,
-		releaseReplace: releaseReplace,
+		RecommendationStore: db,
+		started:             replaceStarted,
+		releaseReplace:      releaseReplace,
 	}
-	service := NewService(blockingStore, httpx.New(time.Second), nil)
+	stores := serviceStoresFromFeedStore(db)
+	stores.Recommendations = blockingStore
+	service := NewServiceWithStores(stores, httpx.New(time.Second), nil)
 
 	recomputeDone := make(chan error, 1)
 	go func() {
@@ -2372,7 +2374,7 @@ func (f *fakeAdapter) Detail(context.Context, domain.FeedEntry, httpx.Getter) (d
 }
 
 type blockingRecommendationStore struct {
-	*store.Store
+	RecommendationStore
 	replaceStarted sync.Once
 	started        chan struct{}
 	releaseReplace <-chan struct{}
@@ -2391,7 +2393,7 @@ func (s *blockingRecommendationStore) ReplaceRecommendationScores(ctx context.Co
 			return ctx.Err()
 		}
 	}
-	return s.Store.ReplaceRecommendationScores(ctx, scores)
+	return s.RecommendationStore.ReplaceRecommendationScores(ctx, scores)
 }
 
 func openAppTestStore(t *testing.T) *store.Store {

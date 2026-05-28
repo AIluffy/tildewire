@@ -131,13 +131,13 @@ func (m Model) applySettingsState(cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	if !m.sourceEnabled(m.view) {
 		m.setSource(domain.SourceAll)
 	}
-	m.settingsOpen = false
-	m.settingsForm = nil
+	m.closeOverlay()
 	m.message = "settings saved"
 	return m, batchCommands(cmd, m.saveSettingsCmd(next), m.loadCmd())
 }
 
 func (m *Model) openSettingsForm() {
+	m.openOverlay(overlaySettings)
 	m.settingsDraft = settingsDraft{
 		Theme:                themeStylesFor(m.config.Theme).spec.value,
 		GlamourStyle:         m.config.GlamourStyle,
@@ -151,17 +151,13 @@ func (m *Model) openSettingsForm() {
 	if strings.TrimSpace(m.settingsDraft.Theme) == "" {
 		m.settingsDraft.Theme = config.ThemeCatppuccin
 	}
-	m.settingsOpen = true
-	m.recommendDiagnosticsOpen = false
 	m.settingsScrollOffset = 0
 	m.settingsForm = m.newSettingsForm()
 	_ = m.settingsForm.Init()
 }
 
 func (m *Model) closeSettings(message string) {
-	m.settingsOpen = false
-	m.settingsForm = nil
-	m.settingsScrollOffset = 0
+	m.closeOverlay()
 	m.message = message
 }
 

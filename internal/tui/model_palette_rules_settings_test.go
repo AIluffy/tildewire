@@ -38,6 +38,32 @@ func TestModelPaletteOpensAddRuleForm(t *testing.T) {
 	}
 }
 
+func TestOverlayModeReplacesPanels(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+
+	model.openFilter()
+	if model.overlay != overlayFilter || model.activeOverlay() != overlayFilter {
+		t.Fatalf("open filter overlay = %v active=%v, want %v", model.overlay, model.activeOverlay(), overlayFilter)
+	}
+	if model.mainPanelsVisible() {
+		t.Fatal("main panels should be hidden while filter overlay is active")
+	}
+
+	model.openPalette()
+	if model.overlay != overlayPalette || model.activeOverlay() != overlayPalette {
+		t.Fatalf("open palette overlay = %v active=%v, want %v", model.overlay, model.activeOverlay(), overlayPalette)
+	}
+
+	model.closeOverlay()
+	if model.overlay != overlayNone || model.activeOverlay() != overlayNone {
+		t.Fatalf("closed overlay = %v active=%v, want none", model.overlay, model.activeOverlay())
+	}
+	if !model.mainPanelsVisible() {
+		t.Fatal("main panels should be visible after closing overlay")
+	}
+}
+
 func TestModelRuleFormCreatesRuleFromRulesPanel(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	service := &fakeService{snapshot: snapshot}
@@ -68,6 +94,9 @@ func TestModelRuleFormCreatesRuleFromRulesPanel(t *testing.T) {
 	}
 	if model.ruleForm != nil {
 		t.Fatal("rule form should close after create")
+	}
+	if model.overlay != overlayNone {
+		t.Fatalf("overlay = %v, want none after rule create", model.overlay)
 	}
 }
 
@@ -445,7 +474,7 @@ func TestModelSettingsFormRejectsEmptySources(t *testing.T) {
 	if model.message != "settings invalid" {
 		t.Fatalf("message = %q, want settings invalid", model.message)
 	}
-	if !model.settingsOpen || model.settingsForm == nil {
+	if model.overlay != overlaySettings || model.settingsForm == nil {
 		t.Fatal("invalid settings should keep the form open")
 	}
 	if len(service.enabledSources) != 0 {
@@ -477,7 +506,7 @@ func TestModelSettingsFormRejectsInvalidTTL(t *testing.T) {
 	if model.message != "settings invalid" {
 		t.Fatalf("message = %q, want settings invalid", model.message)
 	}
-	if !model.settingsOpen || model.settingsForm == nil {
+	if model.overlay != overlaySettings || model.settingsForm == nil {
 		t.Fatal("invalid ttl should keep the form open")
 	}
 }
@@ -511,7 +540,7 @@ func TestModelSettingsFormCancelDoesNotSave(t *testing.T) {
 	if saved {
 		t.Fatal("cancel should not save config")
 	}
-	if model.settingsOpen || model.settingsForm != nil {
+	if model.overlay != overlayNone || model.settingsForm != nil {
 		t.Fatal("cancel should close settings form")
 	}
 	if model.config.Theme != "catppuccin" {

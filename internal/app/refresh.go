@@ -149,7 +149,7 @@ func (s *Service) recordFetchEvent(ctx context.Context, source domain.SourceID, 
 	finishedAt := time.Now().UTC()
 	s.storeMu.Lock()
 	defer s.storeMu.Unlock()
-	return s.store.RecordFetchEvent(ctx, domain.FetchEvent{
+	return s.sourceTelemetry.RecordFetchEvent(ctx, domain.FetchEvent{
 		Source:      source,
 		SourceView:  sourceViewKey(scope),
 		Status:      status,
@@ -166,13 +166,13 @@ func (s *Service) recordFetchEvent(ctx context.Context, source domain.SourceID, 
 func (s *Service) updateSourceStatus(ctx context.Context, source domain.SourceID, status domain.SourceStatus, lastErr string) error {
 	s.storeMu.Lock()
 	defer s.storeMu.Unlock()
-	return s.store.UpdateSourceStatus(ctx, source, status, lastErr)
+	return s.sourceTelemetry.UpdateSourceStatus(ctx, source, status, lastErr)
 }
 
 func (s *Service) replaceSourceViewFeedItems(ctx context.Context, source domain.SourceID, sourceView string, items []domain.FeedItem) error {
 	s.storeMu.Lock()
 	defer s.storeMu.Unlock()
-	return s.store.ReplaceFeedItemsForSourceView(ctx, source, sourceView, items)
+	return s.feedWriter.ReplaceFeedItemsForSourceView(ctx, source, sourceView, items)
 }
 
 func (s *Service) loadFeedAfterRefresh(ctx context.Context, view domain.SourceID, filter FeedFilter) (Snapshot, error) {

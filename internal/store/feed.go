@@ -85,7 +85,7 @@ func (s *Store) ReplaceFeedItemsForSourceView(ctx context.Context, source domain
 }
 
 // ListFeed returns persisted items with source context and user state.
-func (s *Store) ListFeed(ctx context.Context, query FeedQuery) ([]domain.FeedEntry, error) {
+func (s *Store) ListFeed(ctx context.Context, query domain.FeedQuery) ([]domain.FeedEntry, error) {
 	limit := query.Limit
 	if limit <= 0 {
 		limit = 200
@@ -129,7 +129,6 @@ func (s *Store) ListFeed(ctx context.Context, query FeedQuery) ([]domain.FeedEnt
 		itemID := entries[idx].Item.ID
 		sources := filterSourcesForQuery(sourcesByItem[itemID], query.Source, normalized.sourceView)
 		entries[idx].Sources = sources
-		entries[idx].Item.Sources = sources
 		entries[idx].Item.Tags = tagsByItem[itemID]
 	}
 	if query.Source != "" {
@@ -140,7 +139,7 @@ func (s *Store) ListFeed(ctx context.Context, query FeedQuery) ([]domain.FeedEnt
 	return entries, nil
 }
 
-func normalizeFeedQueryForStore(query FeedQuery) (normalizedFeedQuery, bool) {
+func normalizeFeedQueryForStore(query domain.FeedQuery) (normalizedFeedQuery, bool) {
 	normalized := normalizedFeedQuery{
 		source:     string(query.Source),
 		sourceView: strings.ToLower(strings.TrimSpace(query.SourceView)),

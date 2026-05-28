@@ -67,12 +67,7 @@ func (m *Model) clampFeedSelection() {
 
 func (m *Model) openDetail(entry domain.FeedEntry) {
 	m.clearDetailContentCache()
-	m.detail = true
-	m.filterOpen = false
-	m.health = false
-	m.rulesOpen = false
-	m.dedupeOpen = false
-	m.paletteOpen = false
+	m.openOverlay(overlayDetail)
 	m.detailLoading = true
 	m.detailEntryID = entry.Item.ID
 	m.itemDetail = domain.ItemDetail{ItemID: entry.Item.ID, Title: entry.Item.Title, URL: entry.Item.URL}
@@ -306,13 +301,12 @@ func (m *Model) setSource(source domain.SourceID) {
 	} else {
 		m.filter.SourceView = defaultSourceView(source)
 	}
-	m.detail = false
 	m.detailLoading = false
 	m.detailEntryID = ""
 	m.itemDetail = domain.ItemDetail{}
 	m.detailError = ""
 	m.detailOffset = 0
-	m.paletteOpen = false
+	m.closeOverlay()
 	m.activePanel = panelSources
 	m.restoreFeedSelection()
 	m.resetPreviewScroll()

@@ -16,15 +16,10 @@ type paletteCommand struct {
 }
 
 func (m *Model) openPalette() {
-	m.paletteOpen = true
+	m.openOverlay(overlayPalette)
 	m.paletteFilter = ""
 	m.paletteCursor = 0
 	m.paletteOffset = 0
-	m.filterOpen = false
-	m.health = false
-	m.rulesOpen = false
-	m.dedupeOpen = false
-	m.recommendDiagnosticsOpen = false
 	m.message = "command palette"
 }
 
@@ -40,12 +35,12 @@ func (m Model) handlePaletteKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		command := commands[clamp(m.paletteCursor, 0, len(commands)-1)]
-		m.paletteOpen = false
+		m.closeOverlay()
 		m.paletteFilter = ""
 		m.paletteCursor = 0
 		return command.run(m)
 	case "esc":
-		m.paletteOpen = false
+		m.closeOverlay()
 		m.message = "palette cancelled"
 		return m, nil
 	case "j", "down":
@@ -186,13 +181,11 @@ func (m Model) paletteCommands() []paletteCommand {
 		}},
 		paletteCommand{label: "Settings", keywords: "settings config", run: func(m Model) (Model, tea.Cmd) {
 			m.openSettingsForm()
-			m.detail = false
 			m.message = "settings"
 			return m, nil
 		}},
 		paletteCommand{label: "Source health", keywords: "health status sources", run: func(m Model) (Model, tea.Cmd) {
-			m.health = true
-			m.detail = false
+			m.openOverlay(overlayHealth)
 			return m, nil
 		}},
 	)

@@ -6,11 +6,12 @@ import (
 	"errors"
 	"time"
 
+	"github.com/AIluffy/tildewire/internal/httpcache"
 	"github.com/AIluffy/tildewire/internal/store/generated"
 )
 
 // PutHTTPCache stores a raw response cache entry.
-func (s *Store) PutHTTPCache(ctx context.Context, entry HTTPCacheEntry) error {
+func (s *Store) PutHTTPCache(ctx context.Context, entry httpcache.Entry) error {
 	return s.queries.UpsertHTTPCache(ctx, generated.UpsertHTTPCacheParams{
 		RequestKey:   entry.RequestKey,
 		Source:       string(entry.Source),
@@ -27,15 +28,15 @@ func (s *Store) PutHTTPCache(ctx context.Context, entry HTTPCacheEntry) error {
 }
 
 // GetHTTPCache loads a raw response cache entry.
-func (s *Store) GetHTTPCache(ctx context.Context, requestKey string) (HTTPCacheEntry, bool, error) {
+func (s *Store) GetHTTPCache(ctx context.Context, requestKey string) (httpcache.Entry, bool, error) {
 	row, err := s.queries.GetHTTPCache(ctx, requestKey)
 	if errors.Is(err, sql.ErrNoRows) {
-		return HTTPCacheEntry{}, false, nil
+		return httpcache.Entry{}, false, nil
 	}
 	if err != nil {
-		return HTTPCacheEntry{}, false, err
+		return httpcache.Entry{}, false, err
 	}
-	entry := HTTPCacheEntry{
+	entry := httpcache.Entry{
 		RequestKey:   row.RequestKey,
 		Source:       row.Source,
 		Method:       row.Method,

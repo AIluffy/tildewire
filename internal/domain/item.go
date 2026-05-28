@@ -31,7 +31,9 @@ type FeedItem struct {
 	Refs     Refs
 	Metadata json.RawMessage
 	SimHash  string
-	Sources  []ItemSource
+	// Sources is the source-adapter/store-write context for a normalized item.
+	// For persisted feed reads, FeedEntry.Sources is the authoritative source context.
+	Sources []ItemSource
 }
 
 // ItemSource preserves source-native context for a normalized item.
@@ -83,11 +85,19 @@ type ItemState struct {
 
 // FeedEntry combines normalized data, source context, and local state for display.
 type FeedEntry struct {
-	Item                  FeedItem
+	Item FeedItem
+	// Sources is the authoritative source context for persisted/displayed entries.
 	Sources               []ItemSource
 	State                 ItemState
 	HotScore              float64
 	RecommendationReasons []RecommendationReason
+}
+
+// ItemWithSources returns the item plus this entry's source context for FeedItem-only APIs.
+func (e FeedEntry) ItemWithSources() FeedItem {
+	item := e.Item
+	item.Sources = e.Sources
+	return item
 }
 
 // PrimarySource returns the highest-ranked source context for this entry.
