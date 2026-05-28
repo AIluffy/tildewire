@@ -1,5 +1,24 @@
 # tildewire Release Notes
 
+## v0.4.0
+
+v0.4.0 adds a local Recommend workflow on top of the existing multi-source feed. The release focuses on reducing repeat noise by learning from explicit local interactions while keeping source-specific views and privacy boundaries intact.
+
+### Added
+
+- Recommend tab with a top-10 locally ranked feed drawn from the latest cached source windows.
+- Local interaction signals from saved, hidden, read, detail, open, source-open, URL-copy, and Markdown-copy actions.
+- Time-decayed recommendation profile terms across keywords, tags, languages, repos, authors, organizations, and source context.
+- Recommendation diagnostics panel for explaining profile signals, selected-item scoring, and exclusion reasons.
+- Balanced recommendation selection so strong signals from one source do not crowd out every other eligible source.
+- Runtime source/token settings hardening so source visibility, Product Hunt credentials, and HTTP cache TTL changes apply without rebuilding the service.
+
+### Notes
+
+- Recommendation data stays local in SQLite; no remote account or sync service is introduced.
+- Recommend excludes durable hidden items and hide-rule matches even when Show hidden items is enabled.
+- No new CLI subcommands were added; recommendation and diagnostics workflows stay inside the TUI.
+
 ## v0.3.0
 
 v0.3.0 completes the personalization and observability slice for repeat users who want less noise, clearer source health, and first-class AI lab news in the daily radar.
