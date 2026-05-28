@@ -42,15 +42,8 @@ func (m *Model) openRecommendDiagnosticsPanel() {
 }
 
 func (m Model) handleRulesKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
-	case key.Matches(msg, m.keys.Help):
-		m.help.ShowAll = !m.help.ShowAll
-		return m, nil
-	case key.Matches(msg, m.keys.Back):
-		m.closeOverlay()
-		return m, nil
+	if next, cmd, ok := m.handleCommonKey(msg, closeOverlayBack); ok {
+		return next, cmd
 	}
 	switch msg.String() {
 	case "a":
@@ -78,15 +71,8 @@ func (m Model) handleRulesKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleDedupeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
-	case key.Matches(msg, m.keys.Help):
-		m.help.ShowAll = !m.help.ShowAll
-		return m, nil
-	case key.Matches(msg, m.keys.Back):
-		m.closeOverlay()
-		return m, nil
+	if next, cmd, ok := m.handleCommonKey(msg, closeOverlayBack); ok {
+		return next, cmd
 	}
 	switch msg.String() {
 	case "j", "down":

@@ -82,6 +82,19 @@ type fakeMarkdownImagePreviewer struct {
 	err      error
 }
 
+func newFakeService(snapshot app.Snapshot) *fakeService {
+	return &fakeService{snapshot: snapshot}
+}
+
+func testModel(snapshot app.Snapshot, options ...ModelOptions) Model {
+	return NewModel(newFakeService(snapshot), snapshot, options...)
+}
+
+func testModelWithService(snapshot app.Snapshot, options ...ModelOptions) (Model, *fakeService) {
+	service := newFakeService(snapshot)
+	return NewModel(service, snapshot, options...), service
+}
+
 func (f *fakeMarkdownImagePreviewer) RenderMarkdownImage(_ context.Context, request markdownImagePreviewRequest) (markdownImagePreviewResult, error) {
 	f.requests = append(f.requests, request)
 	return f.result, f.err

@@ -45,7 +45,7 @@ func TestModelRecommendPreviewShowsRecommendationReasons(t *testing.T) {
 		{Kind: "tag", Value: "ai", Label: "saved ai", Weight: 1},
 		{Kind: "source", Value: "github", Label: "opened github", Weight: 0.8},
 	}
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 
 	rendered := ansi.Strip(model.renderPreview(42, 10))
 	if !strings.Contains(rendered, "Because: saved ai, opened github") {
@@ -60,7 +60,7 @@ func TestModelRecommendPreviewShowsRecommendationReasons(t *testing.T) {
 }
 
 func TestModelHeaderRendersGradientTitle(t *testing.T) {
-	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false))
+	model := testModel(tuiSnapshot(false))
 
 	header := model.renderHeader()
 	visible := ansi.Strip(header)
@@ -84,7 +84,7 @@ func TestModelHeaderRendersGradientTitle(t *testing.T) {
 func TestModelRenderSourceBadgesAndCounts(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	snapshot.Entries[0].Sources = []domain.ItemSource{{Source: domain.SourceGitHub, SourceRank: 1}}
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 	view := model.render()
 	if !strings.Contains(view, "[GH]") {
 		t.Fatalf("render missing GitHub badge:\n%s", view)
@@ -106,7 +106,7 @@ func TestModelRenderActiveSourceCountUsesSnapshotTotal(t *testing.T) {
 		feedEntry("gh-2", "GitHub two", domain.SourceGitHub, 2, snapshot.LoadedAt),
 	}
 	snapshot.Counts[domain.SourceGitHub] = 162
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 
 	rendered := ansi.Strip(model.renderSources(24, 8))
 	for _, line := range strings.Split(rendered, "\n") {
@@ -125,7 +125,7 @@ func TestModelRenderActiveAllCountUsesSnapshotTotal(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	snapshot.View = domain.SourceAll
 	snapshot.Counts[domain.SourceAll] = 410
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 
 	rendered := ansi.Strip(model.renderSources(24, 8))
 	for _, line := range strings.Split(rendered, "\n") {
@@ -143,7 +143,7 @@ func TestModelRenderActiveAllCountUsesSnapshotTotal(t *testing.T) {
 func TestModelRenderSourcesSpreadsCountsToRightEdge(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	snapshot.Counts[domain.SourceProductHunt] = 12
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 
 	rendered := ansi.Strip(model.renderSources(28, 10))
 	for _, line := range strings.Split(rendered, "\n") {
@@ -169,7 +169,7 @@ func TestModelRenderSourceBadgesUseDistinctColors(t *testing.T) {
 		feedEntry("hn", "Hacker News item", domain.SourceHackerNews, 2, now),
 		feedEntry("hf", "HF item", domain.SourceHuggingFace, 3, now),
 	}
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 	model.cursor = len(snapshot.Entries)
 
 	rendered := model.renderFeed(80, 11)
@@ -194,7 +194,7 @@ func TestModelRenderSourceBadgesUseDistinctColors(t *testing.T) {
 
 func TestModelRenderFeedSeparatesTitleFromContent(t *testing.T) {
 	snapshot := tuiSnapshot(false)
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 
 	rendered := ansi.Strip(model.renderFeed(80, 8))
 	lines := strings.Split(rendered, "\n")
@@ -214,7 +214,7 @@ func TestModelRenderFeedSeparatesTitleFromContent(t *testing.T) {
 
 func TestModelRenderFeedAddsMarginBetweenItems(t *testing.T) {
 	snapshot := tuiSnapshot(false)
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 
 	rendered := ansi.Strip(model.renderFeed(80, 8))
 	lines := strings.Split(rendered, "\n")
@@ -251,7 +251,7 @@ func TestModelRenderFeedAlignsTitlesAcrossIndexDigitBoundaries(t *testing.T) {
 					snapshot.LoadedAt,
 				)
 			}
-			model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+			model := testModel(snapshot)
 			model.feedOffset = tc.before - 1
 			model.cursor = tc.after - 1
 
@@ -280,7 +280,7 @@ func TestModelRenderKeepsMainPanelsWithinTerminalWidth(t *testing.T) {
 	snapshot.Entries[0].Item.Summary = longPreviewSummary()
 	snapshot.Entries[0].Item.URL = "https://huggingface.co/papers/2026/05/11/a-very-long-paper-url-that-must-not-soft-wrap-inside-preview"
 	snapshot.Entries[0].Sources = []domain.ItemSource{{Source: domain.SourceHuggingFace, SourceRank: 1}}
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 	model.width = 84
 	model.height = 12
 
@@ -292,7 +292,7 @@ func TestModelRenderKeepsMainPanelsWithinTerminalWidth(t *testing.T) {
 }
 
 func TestModelRenderKeepsHomeShortcutsAtTerminalBottom(t *testing.T) {
-	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false))
+	model := testModel(tuiSnapshot(false))
 	model.width = 220
 	model.height = 18
 
@@ -310,7 +310,7 @@ func TestModelRenderKeepsHomeShortcutsAtTerminalBottom(t *testing.T) {
 }
 
 func TestModelMainLayoutGivesPreviewMoreRoomWithoutCrowdingFeed(t *testing.T) {
-	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false))
+	model := testModel(tuiSnapshot(false))
 	model.width = 120
 	model.height = 22
 
@@ -328,7 +328,7 @@ func TestModelMainLayoutGivesPreviewMoreRoomWithoutCrowdingFeed(t *testing.T) {
 }
 
 func TestModelMainLayoutExpandsSourcesOnWideScreens(t *testing.T) {
-	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false))
+	model := testModel(tuiSnapshot(false))
 	model.width = 180
 	model.height = 22
 
@@ -343,7 +343,7 @@ func TestModelMainLayoutExpandsSourcesOnWideScreens(t *testing.T) {
 }
 
 func TestModelMainLayoutPreservesPanelMinimumsInNarrowTerminal(t *testing.T) {
-	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false))
+	model := testModel(tuiSnapshot(false))
 	model.width = 40
 	model.height = 12
 
@@ -363,7 +363,7 @@ func TestModelPreviewKeepsFixedHeightAndScrollsWithinPanel(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	snapshot.Entries[0].Item.Title = "Preview start"
 	snapshot.Entries[0].Item.Summary = longPreviewSummary()
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 	model.width = 84
 	model.height = 11
 
@@ -391,7 +391,7 @@ func TestModelPreviewScrollResetsWhenSelectionChanges(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	snapshot.Entries[0].Item.Title = "Preview start"
 	snapshot.Entries[0].Item.Summary = longPreviewSummary()
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 	model.width = 84
 	model.height = 11
 
@@ -438,7 +438,7 @@ func TestModelPreviewRendersCompactSourceNativeSignals(t *testing.T) {
 		}},
 		State: domain.ItemState{ItemID: "gh-1"},
 	}
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 
 	rendered := ansi.Strip(model.renderPreview(84, 12))
 	for _, want := range []string{
@@ -482,7 +482,7 @@ func TestModelPreviewRendersHackerNewsMetrics(t *testing.T) {
 		}},
 		State: domain.ItemState{ItemID: "hn-1"},
 	}
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 
 	rendered := ansi.Strip(model.renderPreview(44, 10))
 	for _, want := range []string{"PREVIEW [HN]", "#6 top", "421 points", "88 comments", "SQLite discussion"} {
@@ -504,7 +504,7 @@ func TestModelPreviewSkipsMissingMetricsWithoutZeroes(t *testing.T) {
 		Sources: []domain.ItemSource{{Source: domain.SourceGitHub}},
 		State:   domain.ItemState{ItemID: "minimal"},
 	}
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 
 	rendered := ansi.Strip(model.renderPreview(42, 8))
 	for _, want := range []string{"PREVIEW [GH]", "Minimal item", "Summary only.", "https://example.com/minimal"} {
@@ -520,7 +520,7 @@ func TestModelPreviewSkipsMissingMetricsWithoutZeroes(t *testing.T) {
 }
 
 func TestModelViewEnablesMouseCellMotion(t *testing.T) {
-	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false))
+	model := testModel(tuiSnapshot(false))
 	view := model.View()
 	if view.MouseMode != tea.MouseModeCellMotion {
 		t.Fatalf("mouse mode = %v, want cell motion", view.MouseMode)

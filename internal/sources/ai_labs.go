@@ -73,16 +73,7 @@ func (a AILabsAdapter) Fetch(ctx context.Context, scope domain.FetchScope, clien
 	if err != nil {
 		return nil, err
 	}
-	return &domain.FetchResult{
-		Source:      domain.SourceAILabs,
-		Scope:       scope,
-		StatusCode:  resp.StatusCode,
-		Body:        resp.Body,
-		FetchedAt:   resp.FetchedAt,
-		FromCache:   resp.FromCache,
-		Stale:       resp.Stale,
-		StaleReason: resp.StaleReason,
-	}, nil
+	return fetchResultFromResponse(domain.SourceAILabs, scope, resp), nil
 }
 
 // Normalize converts AI Labs provider responses into FeedItems.

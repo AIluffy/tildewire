@@ -248,7 +248,7 @@ func TestModelHiddenSourcesAreOmittedFromSourceFilterPaletteAndHealth(t *testing
 		StartedAt:  snapshot.LoadedAt,
 		FinishedAt: snapshot.LoadedAt,
 	}}
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
+	model := testModel(snapshot, ModelOptions{
 		Config: configWithEnabledSources(t, []string{"github", "hackernews", "huggingface", "lobsters"}),
 	})
 
@@ -278,7 +278,7 @@ func TestModelRenderFeedShowsSearchMatchContext(t *testing.T) {
 	snapshot.Entries[0].Item.Title = "Asteroid"
 	snapshot.Entries[0].Item.Subtitle = "135 votes · 26 comments · #10 today"
 	snapshot.Entries[0].Item.Summary = "Asteroid lets teams build computer-use agents for browser, Linux, and Windows workflows in minutes."
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 
 	rendered := ansi.Strip(model.renderFeed(96, 8))
 	if !strings.Contains(rendered, "Asteroid") {
@@ -306,7 +306,7 @@ func TestModelRenderFeedHighlightsSearchTermInTitle(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	snapshot.Filter = app.FeedFilter{Search: "linux"}
 	snapshot.Entries[1].Item.Title = "Linux Kernel Startup"
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 
 	raw := model.renderFeed(96, 8)
 	rendered := ansi.Strip(raw)
@@ -461,7 +461,7 @@ func TestModelPaletteShowHiddenItemsEnablesHiddenFilter(t *testing.T) {
 
 func TestModelPaletteLabelsSelectedHiddenAction(t *testing.T) {
 	snapshot := tuiSnapshot(false)
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 
 	model, cmd := updateModelWithKey(t, model, "p")
 	if cmd != nil {
@@ -478,7 +478,7 @@ func TestModelPaletteLabelsSelectedHiddenAction(t *testing.T) {
 	snapshot = tuiSnapshot(false)
 	snapshot.Filter.IncludeHidden = true
 	snapshot.Entries[0].State.Hidden = true
-	model = NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model = testModel(snapshot)
 	model, cmd = updateModelWithKey(t, model, "p")
 	if cmd != nil {
 		t.Fatal("opening palette should not run command")

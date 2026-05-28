@@ -50,16 +50,7 @@ func (a HuggingFacePapersAdapter) Fetch(ctx context.Context, scope domain.FetchS
 	if err != nil {
 		return nil, err
 	}
-	return &domain.FetchResult{
-		Source:      domain.SourceHuggingFace,
-		Scope:       scope,
-		StatusCode:  resp.StatusCode,
-		Body:        resp.Body,
-		FetchedAt:   resp.FetchedAt,
-		FromCache:   resp.FromCache,
-		Stale:       resp.Stale,
-		StaleReason: resp.StaleReason,
-	}, nil
+	return fetchResultFromResponse(domain.SourceHuggingFace, scope, resp), nil
 }
 
 // Normalize converts Hugging Face Daily Papers JSON into FeedItems.

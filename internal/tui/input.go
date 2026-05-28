@@ -17,15 +17,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if next, cmd, ok := m.switchSourceByKey(msg); ok {
 		return next, cmd
 	}
+	if next, cmd, ok := m.handleCommonKey(msg, closeOverlayBack); ok {
+		return next, cmd
+	}
 	switch {
-	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
-	case key.Matches(msg, m.keys.Help):
-		m.help.ShowAll = !m.help.ShowAll
-		return m, nil
-	case key.Matches(msg, m.keys.Back):
-		m.closeOverlay()
-		return m, nil
 	case key.Matches(msg, m.keys.OpenDetail):
 		if entry, ok := m.selected(); ok {
 			m.openDetail(entry)
@@ -88,59 +83,88 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case key.Matches(msg, m.keys.Refresh):
 		return m.startRefresh(true, app.RefreshModeVisible)
-	case key.Matches(msg, m.keys.Save):
-		entry, ok := m.selected()
-		if !ok {
-			return m, nil
-		}
-		return m, m.setSavedCmd(entry.Item.ID, !entry.State.Saved)
-	case key.Matches(msg, m.keys.MarkRead):
-		entry, ok := m.selected()
-		if !ok {
-			return m, nil
-		}
-		return m, m.setReadCmd(entry.Item.ID, true)
-	case key.Matches(msg, m.keys.MarkUnread):
-		entry, ok := m.selected()
-		if !ok {
-			return m, nil
-		}
-		return m, m.setReadCmd(entry.Item.ID, false)
-	case key.Matches(msg, m.keys.Hide):
-		entry, ok := m.selected()
-		if !ok {
-			return m, nil
-		}
-		return m, m.setHiddenCmd(entry.Item.ID, !entry.State.Hidden)
-	case key.Matches(msg, m.keys.OpenURL):
-		entry, ok := m.selected()
-		if !ok {
-			return m, nil
-		}
-		return m, m.openItemURLCmd(entry)
-	case key.Matches(msg, m.keys.OpenSource):
-		entry, ok := m.selected()
-		if !ok {
-			return m, nil
-		}
-		return m, m.openSourceURLCmd(entry)
-	case key.Matches(msg, m.keys.CopyURL):
-		entry, ok := m.selected()
-		if !ok {
-			return m, nil
-		}
-		return m, m.copyItemURLCmd(entry)
-	case key.Matches(msg, m.keys.CopyMarkdown):
-		entry, ok := m.selected()
-		if !ok {
-			return m, nil
-		}
-		return m, m.copyMarkdownLinkCmd(entry)
 	case key.Matches(msg, m.keys.Health):
 		m.openOverlay(overlayHealth)
 		return m, nil
 	}
+	if next, cmd, ok := m.handleSelectedEntryKey(msg); ok {
+		return next, cmd
+	}
 	return m, nil
+}
+
+func (m Model) handleCommonKey(msg tea.KeyPressMsg, back func(Model) (Model, tea.Cmd)) (Model, tea.Cmd, bool) {
+	switch {
+	case key.Matches(msg, m.keys.Quit):
+		return m, tea.Quit, true
+	case key.Matches(msg, m.keys.Help):
+		m.help.ShowAll = !m.help.ShowAll
+		return m, nil, true
+	case key.Matches(msg, m.keys.Back) && back != nil:
+		next, cmd := back(m)
+		return next, cmd, true
+	default:
+		return m, nil, false
+	}
+}
+
+func closeOverlayBack(m Model) (Model, tea.Cmd) {
+	m.closeOverlay()
+	return m, nil
+}
+
+func detailBack(m Model) (Model, tea.Cmd) {
+	m.closeOverlay()
+	m.detailOffset = 0
+	return m, m.clearDetailRawImagesCmd()
+}
+
+func (m Model) handleSelectedEntryKey(msg tea.KeyPressMsg) (Model, tea.Cmd, bool) {
+	entry, ok := m.selected()
+	switch {
+	case key.Matches(msg, m.keys.Save):
+		if !ok {
+			return m, nil, true
+		}
+		return m, m.setSavedCmd(entry.Item.ID, !entry.State.Saved), true
+	case key.Matches(msg, m.keys.MarkRead):
+		if !ok {
+			return m, nil, true
+		}
+		return m, m.setReadCmd(entry.Item.ID, true), true
+	case key.Matches(msg, m.keys.MarkUnread):
+		if !ok {
+			return m, nil, true
+		}
+		return m, m.setReadCmd(entry.Item.ID, false), true
+	case key.Matches(msg, m.keys.Hide):
+		if !ok {
+			return m, nil, true
+		}
+		return m, m.setHiddenCmd(entry.Item.ID, !entry.State.Hidden), true
+	case key.Matches(msg, m.keys.OpenURL):
+		if !ok {
+			return m, nil, true
+		}
+		return m, m.openItemURLCmd(entry), true
+	case key.Matches(msg, m.keys.OpenSource):
+		if !ok {
+			return m, nil, true
+		}
+		return m, m.openSourceURLCmd(entry), true
+	case key.Matches(msg, m.keys.CopyURL):
+		if !ok {
+			return m, nil, true
+		}
+		return m, m.copyItemURLCmd(entry), true
+	case key.Matches(msg, m.keys.CopyMarkdown):
+		if !ok {
+			return m, nil, true
+		}
+		return m, m.copyMarkdownLinkCmd(entry), true
+	default:
+		return m, nil, false
+	}
 }
 
 func (m Model) switchSourceByKey(msg tea.KeyPressMsg) (Model, tea.Cmd, bool) {
@@ -178,102 +202,39 @@ func (m Model) startRefresh(force bool, mode app.RefreshMode) (Model, tea.Cmd) {
 }
 
 func (m Model) handleHealthKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if next, cmd, ok := m.handleCommonKey(msg, closeOverlayBack); ok {
+		return next, cmd
+	}
 	switch {
-	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
-	case key.Matches(msg, m.keys.Help):
-		m.help.ShowAll = !m.help.ShowAll
-		return m, nil
 	case key.Matches(msg, m.keys.Refresh):
 		next, cmd := m.startRefresh(true, app.RefreshModeVisible)
 		if cmd != nil && m.lastError != "" {
 			next.message = "retrying failed refresh"
 		}
 		return next, cmd
-	case key.Matches(msg, m.keys.Back):
-		m.closeOverlay()
-		return m, nil
 	}
 	return m, nil
 }
 
 func (m Model) handleRecommendDiagnosticsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
-	case key.Matches(msg, m.keys.Help):
-		m.help.ShowAll = !m.help.ShowAll
-		return m, nil
-	case key.Matches(msg, m.keys.Back):
-		m.closeOverlay()
-		return m, nil
+	if next, cmd, ok := m.handleCommonKey(msg, closeOverlayBack); ok {
+		return next, cmd
 	}
 	return m, nil
 }
 
 func (m Model) handleDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if next, cmd, ok := m.handleCommonKey(msg, detailBack); ok {
+		return next, cmd
+	}
 	switch {
-	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
-	case key.Matches(msg, m.keys.Help):
-		m.help.ShowAll = !m.help.ShowAll
-		return m, nil
-	case key.Matches(msg, m.keys.Back):
-		m.closeOverlay()
-		m.detailOffset = 0
-		return m, m.clearDetailRawImagesCmd()
 	case key.Matches(msg, m.keys.PreviewUp):
 		return m, m.scrollDetailRawImagesCmd(-m.detailPageSize())
 	case key.Matches(msg, m.keys.PreviewDown):
 		return m, m.scrollDetailRawImagesCmd(m.detailPageSize())
-	case key.Matches(msg, m.keys.Save):
-		entry, ok := m.selected()
-		if !ok {
-			return m, nil
-		}
-		return m, m.setSavedCmd(entry.Item.ID, !entry.State.Saved)
-	case key.Matches(msg, m.keys.MarkRead):
-		entry, ok := m.selected()
-		if !ok {
-			return m, nil
-		}
-		return m, m.setReadCmd(entry.Item.ID, true)
-	case key.Matches(msg, m.keys.MarkUnread):
-		entry, ok := m.selected()
-		if !ok {
-			return m, nil
-		}
-		return m, m.setReadCmd(entry.Item.ID, false)
-	case key.Matches(msg, m.keys.Hide):
-		entry, ok := m.selected()
-		if !ok {
-			return m, nil
-		}
-		return m, m.setHiddenCmd(entry.Item.ID, !entry.State.Hidden)
-	case key.Matches(msg, m.keys.OpenURL):
-		entry, ok := m.selected()
-		if !ok {
-			return m, nil
-		}
-		return m, m.openItemURLCmd(entry)
-	case key.Matches(msg, m.keys.OpenSource):
-		entry, ok := m.selected()
-		if !ok {
-			return m, nil
-		}
-		return m, m.openSourceURLCmd(entry)
-	case key.Matches(msg, m.keys.CopyURL):
-		entry, ok := m.selected()
-		if !ok {
-			return m, nil
-		}
-		return m, m.copyItemURLCmd(entry)
-	case key.Matches(msg, m.keys.CopyMarkdown):
-		entry, ok := m.selected()
-		if !ok {
-			return m, nil
-		}
-		return m, m.copyMarkdownLinkCmd(entry)
+	}
+	if next, cmd, ok := m.handleSelectedEntryKey(msg); ok {
+		return next, cmd
 	}
 	switch msg.String() {
 	case "j", "down":

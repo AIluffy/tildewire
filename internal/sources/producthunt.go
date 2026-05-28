@@ -93,16 +93,7 @@ func (a *ProductHuntAdapter) Fetch(ctx context.Context, scope domain.FetchScope,
 	if err != nil {
 		return nil, err
 	}
-	return &domain.FetchResult{
-		Source:      domain.SourceProductHunt,
-		Scope:       scope,
-		StatusCode:  resp.StatusCode,
-		Body:        resp.Body,
-		FetchedAt:   resp.FetchedAt,
-		FromCache:   resp.FromCache,
-		Stale:       resp.Stale,
-		StaleReason: resp.StaleReason,
-	}, nil
+	return fetchResultFromResponse(domain.SourceProductHunt, scope, resp), nil
 }
 
 // Normalize converts Product Hunt GraphQL JSON into FeedItems.

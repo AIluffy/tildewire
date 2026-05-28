@@ -50,16 +50,7 @@ func (a LobstersAdapter) Fetch(ctx context.Context, scope domain.FetchScope, cli
 	if err != nil {
 		return nil, err
 	}
-	return &domain.FetchResult{
-		Source:      domain.SourceLobsters,
-		Scope:       scope,
-		StatusCode:  resp.StatusCode,
-		Body:        resp.Body,
-		FetchedAt:   resp.FetchedAt,
-		FromCache:   resp.FromCache,
-		Stale:       resp.Stale,
-		StaleReason: resp.StaleReason,
-	}, nil
+	return fetchResultFromResponse(domain.SourceLobsters, scope, resp), nil
 }
 
 // Normalize converts Lobsters JSON into FeedItems.

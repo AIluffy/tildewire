@@ -17,6 +17,10 @@ import (
 const (
 	refreshProgressInterval = 200 * time.Millisecond
 	refreshProgressTimeout  = 2 * time.Second
+	defaultCommandTimeout   = 5 * time.Second
+	exportCommandTimeout    = 10 * time.Second
+	detailCommandTimeout    = 20 * time.Second
+	refreshCommandTimeout   = 40 * time.Second
 	toastDuration           = 1400 * time.Millisecond
 )
 
@@ -39,45 +43,47 @@ func batchCommands(cmds ...tea.Cmd) tea.Cmd {
 	}
 }
 
-func (m Model) loadCmd() tea.Cmd {
+func timeoutCmd(timeout time.Duration, run func(context.Context) tea.Msg) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		snapshot, err := m.service.LoadFeed(ctx, m.view, m.filter)
-		return snapshotMsg{snapshot: snapshot, err: err, message: "feed loaded"}
+		return runWithTimeout(timeout, run)
 	}
+}
+
+func runWithTimeout(timeout time.Duration, run func(context.Context) tea.Msg) tea.Msg {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return run(ctx)
+}
+
+func (m Model) loadCmd() tea.Cmd {
+	return m.loadSnapshotCmd("feed loaded", nil)
 }
 
 func (m Model) loadWithMessageCmd(message string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		snapshot, err := m.service.LoadFeed(ctx, m.view, m.filter)
-		return snapshotMsg{snapshot: snapshot, err: err, message: message}
-	}
+	return m.loadSnapshotCmd(message, nil)
 }
 
 func (m Model) searchLoadCmd(searchLoadID int, message string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		snapshot, err := m.service.LoadFeed(ctx, m.view, m.filter)
-		return snapshotMsg{searchLoadID: searchLoadID, snapshot: snapshot, err: err, message: message}
-	}
+	return m.loadSnapshotCmd(message, func(msg *snapshotMsg) {
+		msg.searchLoadID = searchLoadID
+	})
 }
 
 func (m Model) loadThenRefreshCmd() tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+	return m.loadSnapshotCmd("feed loaded", func(msg *snapshotMsg) {
+		msg.nextRefresh = &refreshRequest{mode: app.RefreshModeVisible}
+	})
+}
+
+func (m Model) loadSnapshotCmd(message string, customize func(*snapshotMsg)) tea.Cmd {
+	return timeoutCmd(defaultCommandTimeout, func(ctx context.Context) tea.Msg {
 		snapshot, err := m.service.LoadFeed(ctx, m.view, m.filter)
-		return snapshotMsg{
-			snapshot:    snapshot,
-			err:         err,
-			message:     "feed loaded",
-			nextRefresh: &refreshRequest{mode: app.RefreshModeVisible},
+		msg := snapshotMsg{snapshot: snapshot, err: err, message: message}
+		if customize != nil {
+			customize(&msg)
 		}
-	}
+		return msg
+	})
 }
 
 func (m Model) refreshWithProgressCmd(refreshID int, force bool, mode app.RefreshMode) tea.Cmd {
@@ -85,21 +91,19 @@ func (m Model) refreshWithProgressCmd(refreshID int, force bool, mode app.Refres
 }
 
 func (m Model) refreshCmd(refreshID int, force bool, mode app.RefreshMode) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
-		defer cancel()
+	return timeoutCmd(refreshCommandTimeout, func(ctx context.Context) tea.Msg {
 		snapshot, err := m.service.Refresh(ctx, m.view, m.filter, app.RefreshOptions{Force: force, Mode: mode})
 		return snapshotMsg{refreshID: refreshID, snapshot: snapshot, err: err, message: "refresh complete"}
-	}
+	})
 }
 
 func (m Model) refreshProgressCmd(refreshID int) tea.Cmd {
 	return func() tea.Msg {
 		time.Sleep(refreshProgressInterval)
-		ctx, cancel := context.WithTimeout(context.Background(), refreshProgressTimeout)
-		defer cancel()
-		snapshot, err := m.service.LoadFeed(ctx, m.view, m.filter)
-		return refreshProgressMsg{refreshID: refreshID, snapshot: snapshot, err: err}
+		return runWithTimeout(refreshProgressTimeout, func(ctx context.Context) tea.Msg {
+			snapshot, err := m.service.LoadFeed(ctx, m.view, m.filter)
+			return refreshProgressMsg{refreshID: refreshID, snapshot: snapshot, err: err}
+		})
 	}
 }
 
@@ -173,17 +177,13 @@ func (m Model) setHiddenCmd(itemID string, hidden bool) tea.Cmd {
 
 func (m Model) setItemStateCmd(itemID string, message string, canPatch func() bool, mutate func(context.Context, string) error, patch func(*itemStatePatchMsg)) tea.Cmd {
 	if canPatch() {
-		return func() tea.Msg {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
+		return timeoutCmd(defaultCommandTimeout, func(ctx context.Context) tea.Msg {
 			msg := itemStatePatchMsg{itemID: itemID, err: mutate(ctx, itemID), message: message}
 			patch(&msg)
 			return msg
-		}
+		})
 	}
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+	return timeoutCmd(defaultCommandTimeout, func(ctx context.Context) tea.Msg {
 		if err := mutate(ctx, itemID); err != nil {
 			return statusMsg{message: "item state failed", err: err}
 		}
@@ -192,51 +192,43 @@ func (m Model) setItemStateCmd(itemID string, message string, canPatch func() bo
 			snapshot = m.currentSnapshot()
 		}
 		return snapshotMsg{snapshot: snapshot, err: err, message: message}
-	}
+	})
 }
 
 func (m Model) loadDetailCmd(entry domain.FeedEntry) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
+	return timeoutCmd(detailCommandTimeout, func(ctx context.Context) tea.Msg {
 		detail, err := m.service.LoadDetail(ctx, entry)
 		return detailMsg{itemID: entry.Item.ID, detail: detail, err: err}
-	}
+	})
 }
 
 func (m Model) recommendDiagnosticsCmd(entry domain.FeedEntry) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+	return timeoutCmd(defaultCommandTimeout, func(ctx context.Context) tea.Msg {
 		diagnostics, err := m.service.RecommendationDiagnostics(ctx, entry)
 		return recommendDiagnosticsMsg{diagnostics: diagnostics, err: err}
-	}
+	})
 }
 
 func (m Model) markdownImagePreviewCmd(itemID string, key markdownImagePreviewKey, request markdownImagePreviewRequest) tea.Cmd {
 	previewer := m.imagePreviewer
-	return func() tea.Msg {
+	return timeoutCmd(detailCommandTimeout, func(ctx context.Context) tea.Msg {
 		if previewer == nil {
 			return markdownImagePreviewMsg{itemID: itemID, key: key, err: fmt.Errorf("markdown image previewer is not configured")}
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
 		result, err := previewer.RenderMarkdownImage(ctx, request)
 		return markdownImagePreviewMsg{itemID: itemID, key: key, result: result, err: err}
-	}
+	})
 }
 
 func (m Model) exportSavedCmd(format app.ExportFormat) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+	return timeoutCmd(exportCommandTimeout, func(ctx context.Context) tea.Msg {
 		dir := filepath.Join(m.exportBaseDir(), "exports")
 		result, err := m.service.ExportSaved(ctx, app.ExportOptions{Format: format, Dir: dir})
 		if err != nil {
 			return statusMsg{message: "export failed", err: err}
 		}
 		return statusMsg{message: fmt.Sprintf("exported saved items: %s (%d)", result.Path, result.Count)}
-	}
+	})
 }
 
 func (m Model) exportBaseDir() string {
@@ -247,9 +239,7 @@ func (m Model) exportBaseDir() string {
 }
 
 func (m Model) clearCacheCmd() tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+	return timeoutCmd(exportCommandTimeout, func(ctx context.Context) tea.Msg {
 		snapshot, err := m.service.ClearCache(ctx, m.view, m.filter)
 		if err != nil {
 			return statusMsg{message: "clear cache failed", err: err}
@@ -259,7 +249,7 @@ func (m Model) clearCacheCmd() tea.Cmd {
 			message:     "cache cleared",
 			nextRefresh: &refreshRequest{force: true, mode: app.RefreshModeVisible},
 		}
-	}
+	})
 }
 
 func openURLCmd(url string) tea.Cmd {

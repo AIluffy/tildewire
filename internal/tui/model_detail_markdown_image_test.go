@@ -57,7 +57,7 @@ func TestModelHealthViewRendersSourceDetailsAndKeepsHelp(t *testing.T) {
 		StaleReason: "RATE_LIMITED",
 		Error:       "served stale cache",
 	}}
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 
 	model, cmd := updateModelWithKey(t, model, "!")
 	if cmd != nil {
@@ -83,7 +83,7 @@ func TestModelHealthViewRendersSourceDetailsAndKeepsHelp(t *testing.T) {
 func TestModelDetailUsesGlamourAndFallsBack(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	snapshot.Entries[0].Item.Summary = "A **markdown** summary."
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
+	model := testModel(snapshot, ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
 
 	model, _ = updateModelWithKey(t, model, "enter")
 	rendered := model.render()
@@ -111,7 +111,7 @@ func TestModelDetailUsesGlamourAndFallsBack(t *testing.T) {
 }
 
 func TestModelRenderMarkdownUsesLipglossTableStyle(t *testing.T) {
-	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false), ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
+	model := testModel(tuiSnapshot(false), ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
 	markdown := strings.Join([]string{
 		"| What | How | Speed |",
 		"| --- | --- | ---: |",
@@ -135,7 +135,7 @@ func TestModelRenderMarkdownUsesLipglossTableStyle(t *testing.T) {
 }
 
 func TestModelRenderMarkdownUsesTerminalAdaptiveCodeBlockBackground(t *testing.T) {
-	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false), ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
+	model := testModel(tuiSnapshot(false), ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
 	markdown := strings.Join([]string{
 		"```go",
 		`fmt.Println("tildewire")`,
@@ -156,7 +156,7 @@ func TestModelRenderMarkdownUsesTerminalAdaptiveCodeBlockBackground(t *testing.T
 }
 
 func TestModelBackgroundColorMessageUpdatesCodeBlockTheme(t *testing.T) {
-	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false), ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
+	model := testModel(tuiSnapshot(false), ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
 	markdown := strings.Join([]string{
 		"```go",
 		`fmt.Println("tildewire")`,
@@ -179,7 +179,7 @@ func TestModelBackgroundColorMessageUpdatesCodeBlockTheme(t *testing.T) {
 }
 
 func TestModelRenderMarkdownRendersCodeBlockWithPaddingAndCopyAffordance(t *testing.T) {
-	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false), ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
+	model := testModel(tuiSnapshot(false), ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
 	markdown := strings.Join([]string{
 		"```sh",
 		"# Download DMG, EXEs over at https://tinyhumans.ai/openhuman",
@@ -210,7 +210,7 @@ func TestModelRenderMarkdownRendersCodeBlockWithPaddingAndCopyAffordance(t *test
 }
 
 func TestModelRenderMarkdownRendersCodeBlockWithoutFenceMarkers(t *testing.T) {
-	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false), ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
+	model := testModel(tuiSnapshot(false), ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
 	markdown := strings.Join([]string{
 		"```go",
 		`fmt.Println("tildewire")`,
@@ -233,7 +233,7 @@ func TestModelRenderMarkdownRendersCodeBlockWithoutFenceMarkers(t *testing.T) {
 }
 
 func TestModelRenderMarkdownRendersThematicBreakSeparator(t *testing.T) {
-	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false), ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
+	model := testModel(tuiSnapshot(false), ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
 	markdown := strings.Join([]string{
 		"Before",
 		"",
@@ -1558,7 +1558,7 @@ func TestModelGitHubDetailFallsBackWhenImagePreviewFails(t *testing.T) {
 }
 
 func TestModelRenderKeepsDetailShortcutsAtTerminalBottom(t *testing.T) {
-	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false), ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
+	model := testModel(tuiSnapshot(false), ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
 	model.width = 90
 	model.height = 16
 
@@ -1577,7 +1577,7 @@ func TestModelRenderKeepsDetailShortcutsAtTerminalBottom(t *testing.T) {
 }
 
 func TestModelDetailCentersContentWithoutTitleOnWideTerminal(t *testing.T) {
-	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false), ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
+	model := testModel(tuiSnapshot(false), ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
 	model.width = 120
 	model.height = 16
 
@@ -1883,7 +1883,7 @@ func TestModelGitHubDetailKeepsSourceComments(t *testing.T) {
 
 func TestModelDetailDoesNotRenderEmptyProviderLine(t *testing.T) {
 	snapshot := tuiSnapshot(false)
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
+	model := testModel(snapshot, ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
 
 	model, _ = updateModelWithKey(t, model, "enter")
 	rendered := ansi.Strip(model.render())
@@ -2019,7 +2019,7 @@ func TestModelDetailMouseWheelReusesRenderedLines(t *testing.T) {
 
 func TestModelDetailContentAddsBottomSpacing(t *testing.T) {
 	snapshot := tuiSnapshot(false)
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
+	model := testModel(snapshot, ModelOptions{Config: config.Config{GlamourStyle: "dark"}})
 
 	model, _ = updateModelWithKey(t, model, "enter")
 	assertDetailBottomSpacing(t, model.detailContentLines(model.detailContentWidth()))

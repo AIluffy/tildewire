@@ -15,7 +15,7 @@ import (
 )
 
 func TestModelMovesSelection(t *testing.T) {
-	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false))
+	model := testModel(tuiSnapshot(false))
 	updated, _ := model.Update(keyPress("j"))
 	model = updated.(Model)
 	if model.cursor != 1 {
@@ -389,7 +389,7 @@ func TestModelMouseClickGitHubFeedDoesNotOpenScopePicker(t *testing.T) {
 }
 
 func TestModelLeftRightKeysMoveFocusBetweenMainPanels(t *testing.T) {
-	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false))
+	model := testModel(tuiSnapshot(false))
 	if model.activePanel != panelFeed {
 		t.Fatalf("initial active panel = %v, want feed", model.activePanel)
 	}
@@ -466,7 +466,7 @@ func TestModelSourceCountUsesSnapshotCountsDuringSwitch(t *testing.T) {
 
 func TestModelSourcesUsePersistedOrder(t *testing.T) {
 	cfg := configWithSourceOrder(t, []string{"producthunt", "github", "hackernews"})
-	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false), ModelOptions{Config: cfg})
+	model := testModel(tuiSnapshot(false), ModelOptions{Config: cfg})
 
 	rendered := ansi.Strip(model.renderSources(24, 8))
 	recommendIndex := strings.Index(rendered, "Recommend")
@@ -485,7 +485,7 @@ func TestModelRecommendEmptyStatePromptsForTraining(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	snapshot.View = domain.SourceRecommend
 	snapshot.Entries = nil
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 	model.refreshing = false
 
 	rendered := ansi.Strip(model.renderFeed(80, 8))
@@ -597,7 +597,7 @@ func TestModelMouseWheelScrollsOnlyTargetPanel(t *testing.T) {
 		entry.Item.Title = "Extra item"
 		snapshot.Entries = append(snapshot.Entries, entry)
 	}
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 	model.width = 100
 	model.height = 12
 

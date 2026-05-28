@@ -50,7 +50,7 @@ func TestModelPaletteOpensRecommendDiagnostics(t *testing.T) {
 }
 
 func TestModelRecommendDiagnosticsEmptyAndNarrowRender(t *testing.T) {
-	model := NewModel(&fakeService{snapshot: tuiSnapshot(false)}, tuiSnapshot(false))
+	model := testModel(tuiSnapshot(false))
 	model.width = 42
 	model.openOverlay(overlayRecommendDiagnostics)
 	model.recommendDiagnostics = domain.RecommendationDiagnostics{}
@@ -70,7 +70,7 @@ func TestModelRecommendDiagnosticsEmptyAndNarrowRender(t *testing.T) {
 
 func TestModelRecommendDiagnosticsKeys(t *testing.T) {
 	snapshot := tuiSnapshot(false)
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 	model.openOverlay(overlayRecommendDiagnostics)
 
 	updated, cmd := model.Update(keyPress("?"))
@@ -103,7 +103,7 @@ func TestModelRecommendDiagnosticsKeys(t *testing.T) {
 
 func TestModelRecommendDiagnosticsClearsStalePayload(t *testing.T) {
 	snapshot := tuiSnapshot(false)
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 	model.recommendDiagnostics = testRecommendationDiagnostics("stale")
 	model.openRecommendDiagnosticsPanel()
 	if model.recommendDiagnostics.Selected.ItemID != "" {

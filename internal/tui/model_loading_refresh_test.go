@@ -159,7 +159,7 @@ func TestModelStaleRefreshSnapshotUpdatesInactiveSourceStatus(t *testing.T) {
 		{Source: domain.SourceGitHub, Name: "GitHub", Status: domain.SourceStatusRefreshing},
 		{Source: domain.SourceHackerNews, Name: "Hacker News", Status: domain.SourceStatusRefreshing},
 	}
-	model := NewModel(&fakeService{snapshot: initial}, initial)
+	model := testModel(initial)
 	model.refreshID = 2
 	model.refreshing = true
 
@@ -204,7 +204,7 @@ func TestModelBackgroundCountsDoNotAddRecommendToAll(t *testing.T) {
 		domain.SourceGitHub:     10,
 		domain.SourceHackerNews: 2,
 	}
-	model := NewModel(&fakeService{snapshot: initial}, initial)
+	model := testModel(initial)
 
 	background := initial
 	background.Counts = map[domain.SourceID]int{
@@ -312,7 +312,7 @@ func TestModelDetailLoadingSpinnerAnimatesWithoutRefresh(t *testing.T) {
 func TestModelLoadingStateRendersSourcesWhenNoCache(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	snapshot.Entries = nil
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 
 	rendered := model.render()
 	plain := ansi.Strip(rendered)
@@ -335,7 +335,7 @@ func TestModelSingleSourceLoadingStateRendersOnlyCurrentSource(t *testing.T) {
 		{Source: domain.SourceLobsters, Name: "Lobsters", Status: domain.SourceStatusOK},
 		{Source: domain.SourceProductHunt, Name: "Product Hunt", Status: domain.SourceStatusOK},
 	}
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 
 	plain := ansi.Strip(model.renderFeed(80, 10))
 	for _, want := range []string{"Loading GitHub", "[GH]", "REFRESHING"} {

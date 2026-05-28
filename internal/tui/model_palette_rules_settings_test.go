@@ -40,7 +40,7 @@ func TestModelPaletteOpensAddRuleForm(t *testing.T) {
 
 func TestOverlayModeReplacesPanels(t *testing.T) {
 	snapshot := tuiSnapshot(false)
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot)
+	model := testModel(snapshot)
 
 	model.openFilter()
 	if model.overlay != overlayFilter || model.activeOverlay() != overlayFilter {
@@ -330,7 +330,7 @@ func TestModelSettingsFormSavesRuntimeConfig(t *testing.T) {
 
 func TestModelSettingsRenderGroupsAllSettings(t *testing.T) {
 	snapshot := tuiSnapshot(false)
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
+	model := testModel(snapshot, ModelOptions{
 		Config: config.Config{
 			Theme:                "catppuccin",
 			GlamourStyle:         "dark",
@@ -374,7 +374,7 @@ func TestModelSettingsRenderGroupsAllSettings(t *testing.T) {
 
 func TestModelSettingsSmallScreenMouseWheelScrollsForm(t *testing.T) {
 	snapshot := tuiSnapshot(false)
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
+	model := testModel(snapshot, ModelOptions{
 		Config: config.Config{
 			Theme:                "catppuccin",
 			GlamourStyle:         "dark",
@@ -419,7 +419,7 @@ func TestModelSettingsSmallScreenMouseWheelScrollsForm(t *testing.T) {
 
 func TestModelSettingsSmallScreenPageKeysScrollForm(t *testing.T) {
 	snapshot := tuiSnapshot(false)
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
+	model := testModel(snapshot, ModelOptions{
 		Config: config.Config{
 			Theme:                "catppuccin",
 			GlamourStyle:         "dark",
@@ -484,7 +484,7 @@ func TestModelSettingsFormRejectsEmptySources(t *testing.T) {
 
 func TestModelSettingsFormRejectsInvalidTTL(t *testing.T) {
 	snapshot := tuiSnapshot(false)
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
+	model := testModel(snapshot, ModelOptions{
 		Config: config.Config{
 			Theme:                "catppuccin",
 			GlamourStyle:         "dark",
@@ -514,7 +514,7 @@ func TestModelSettingsFormRejectsInvalidTTL(t *testing.T) {
 func TestModelSettingsFormCancelDoesNotSave(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	saved := false
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
+	model := testModel(snapshot, ModelOptions{
 		Config: config.Config{
 			Theme:                "catppuccin",
 			GlamourStyle:         "dark",
@@ -552,7 +552,7 @@ func TestModelPaletteThemeCommandPersistsTheme(t *testing.T) {
 	snapshot := tuiSnapshot(false)
 	saved := false
 	var savedConfig config.Config
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
+	model := testModel(snapshot, ModelOptions{
 		Config: config.Config{
 			Theme:                "catppuccin",
 			GlamourStyle:         "dark",
@@ -591,7 +591,7 @@ func TestModelPaletteThemeCommandPersistsTheme(t *testing.T) {
 
 func TestModelThemeChangesRenderedColors(t *testing.T) {
 	snapshot := tuiSnapshot(false)
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
+	model := testModel(snapshot, ModelOptions{
 		Config: config.Config{
 			Theme:                "catppuccin",
 			GlamourStyle:         "dark",
@@ -617,7 +617,7 @@ func TestModelThemeChangesRenderedColors(t *testing.T) {
 
 func TestModelSettingsPasswordInputsHideExistingTokens(t *testing.T) {
 	snapshot := tuiSnapshot(false)
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{
+	model := testModel(snapshot, ModelOptions{
 		Config: config.Config{
 			GlamourStyle:         "dark",
 			MarkdownImagePreview: "auto",
@@ -641,7 +641,7 @@ func TestModelSettingsPasswordInputsHideExistingTokens(t *testing.T) {
 
 func TestModelFirstRunOpensSettingsForm(t *testing.T) {
 	snapshot := tuiSnapshot(false)
-	model := NewModel(&fakeService{snapshot: snapshot}, snapshot, ModelOptions{FirstRun: true, Config: config.Config{GlamourStyle: "dark"}})
+	model := testModel(snapshot, ModelOptions{FirstRun: true, Config: config.Config{GlamourStyle: "dark"}})
 
 	if !strings.Contains(model.render(), "SETTINGS") {
 		t.Fatalf("first-run should render settings:\n%s", model.render())

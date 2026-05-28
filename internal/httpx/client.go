@@ -271,9 +271,16 @@ func (c *Client) prepareRequest(ctx context.Context, options requestOptions) (re
 
 func (state requestState) freshCacheResponse(forceRefresh bool) (Response, bool) {
 	if state.hasCache && !forceRefresh && state.cached.ExpiresAt.After(state.now) {
-		return responseFromCache(state.cached, false, ""), true
+		return state.cachedResponse(false, "")
 	}
 	return Response{}, false
+}
+
+func (state requestState) cachedResponse(stale bool, reason string) (Response, bool) {
+	if !state.hasCache {
+		return Response{}, false
+	}
+	return responseFromCache(state.cached, stale, reason), true
 }
 
 func (c *Client) executeRequest(ctx context.Context, options requestOptions, state requestState) (Response, error) {
@@ -285,8 +292,8 @@ func (c *Client) executeRequest(ctx context.Context, options requestOptions, sta
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		if state.hasCache {
-			return responseFromCache(state.cached, true, StaleReasonNetworkError), nil
+		if cached, ok := state.cachedResponse(true, StaleReasonNetworkError); ok {
+			return cached, nil
 		}
 		return Response{}, err
 	}
@@ -294,8 +301,8 @@ func (c *Client) executeRequest(ctx context.Context, options requestOptions, sta
 
 	body, err := readLimitedBody(resp.Body, state.maxBodyBytes)
 	if err != nil {
-		if state.hasCache {
-			return responseFromCache(state.cached, true, StaleReasonNetworkError), nil
+		if cached, ok := state.cachedResponse(true, StaleReasonNetworkError); ok {
+			return cached, nil
 		}
 		return Response{}, err
 	}
@@ -303,7 +310,7 @@ func (c *Client) executeRequest(ctx context.Context, options requestOptions, sta
 		return c.extendCacheEntry(ctx, state.cache, state.cached, resp.Header, state.ttl)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return c.handleHTTPError(ctx, state.cache, state.source, state.key, options.URL, resp, state.cached, state.hasCache)
+		return c.handleHTTPError(ctx, state, options.URL, resp)
 	}
 	return c.storeResponse(ctx, state.cache, state.key, state.source, options.Method, options.URL, body, resp.Header, resp.StatusCode, state.ttl)
 }
@@ -338,8 +345,7 @@ func (c *Client) responseDuringCooldown(ctx context.Context, state requestState,
 	if !ok || !cooldownUntil.After(state.now) {
 		return nil, nil
 	}
-	if state.hasCache {
-		resp := responseFromCache(state.cached, true, StaleReasonRateLimited)
+	if resp, ok := state.cachedResponse(true, StaleReasonRateLimited); ok {
 		return &resp, nil
 	}
 	return nil, fmt.Errorf("%w: http 429 cooldown until %s for %s", ErrRateLimited, cooldownUntil.Format(time.RFC3339), url)
@@ -364,8 +370,7 @@ func (c *Client) waitForLimiter(ctx context.Context, key string) error {
 
 func (c *Client) waitForRequestSlot(ctx context.Context, state requestState, bucket string) (*Response, error) {
 	if err := c.waitForLimiter(ctx, limiterKey(state.source, bucket)); err != nil {
-		if state.hasCache {
-			resp := responseFromCache(state.cached, true, StaleReasonRateLimited)
+		if resp, ok := state.cachedResponse(true, StaleReasonRateLimited); ok {
 			return &resp, nil
 		}
 		return nil, fmt.Errorf("%w: %v", ErrRateLimited, err)
@@ -418,25 +423,25 @@ func (c *Client) extendCacheEntry(ctx context.Context, cache httpcache.Store, ca
 	return responseFromCache(refreshed, false, ""), nil
 }
 
-func (c *Client) handleHTTPError(ctx context.Context, cache httpcache.Store, source, key, url string, resp *http.Response, cached httpcache.Entry, hasCache bool) (Response, error) {
+func (c *Client) handleHTTPError(ctx context.Context, state requestState, url string, resp *http.Response) (Response, error) {
 	statusErr := &HTTPStatusError{StatusCode: resp.StatusCode, URL: url}
 	if isRateLimitedResponse(resp) {
-		if cooldowns, ok := cache.(httpcache.CooldownStore); ok {
+		if cooldowns, ok := state.cache.(httpcache.CooldownStore); ok {
 			cooldownUntil := rateLimitCooldownUntil(resp.Header, time.Now().UTC())
-			if err := cooldowns.SetRateLimitCooldown(ctx, source, key, cooldownUntil); err != nil {
+			if err := cooldowns.SetRateLimitCooldown(ctx, state.source, state.key, cooldownUntil); err != nil {
 				return Response{}, fmt.Errorf("store rate-limit cooldown: %w", err)
 			}
 		}
-		if hasCache {
-			return responseFromCache(cached, true, StaleReasonRateLimited), nil
+		if cached, ok := state.cachedResponse(true, StaleReasonRateLimited); ok {
+			return cached, nil
 		}
 		return Response{}, fmt.Errorf("%w: %w", ErrRateLimited, statusErr)
 	}
 	if isAuthStatus(resp.StatusCode) {
 		return Response{}, statusErr
 	}
-	if hasCache {
-		return responseFromCache(cached, true, StaleReasonNetworkError), nil
+	if cached, ok := state.cachedResponse(true, StaleReasonNetworkError); ok {
+		return cached, nil
 	}
 	return Response{}, statusErr
 }
