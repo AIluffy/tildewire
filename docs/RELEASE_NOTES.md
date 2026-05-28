@@ -1,5 +1,15 @@
 # tildewire Release Notes
 
+## v0.4.1
+
+v0.4.1 is a patch release for feed ordering correctness and internal state-boundary hardening after v0.4.0.
+
+### Fixed
+
+- AI Labs source feeds now order items by published date from newest to oldest before source limits are applied.
+- The AI Labs aggregate source view now preserves newest-first ordering across lab providers.
+- App, TUI, HTTP cooldown, source navigation, and Markdown image-preview state boundaries were tightened with regression coverage.
+
 ## v0.4.0
 
 v0.4.0 adds a local Recommend workflow on top of the existing multi-source feed. The release focuses on reducing repeat noise by learning from explicit local interactions while keeping source-specific views and privacy boundaries intact.

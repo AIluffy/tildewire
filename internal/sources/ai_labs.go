@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -97,6 +98,7 @@ func (a AILabsAdapter) Normalize(_ context.Context, scope domain.FetchScope, raw
 	if len(entries) == 0 {
 		return nil, fmt.Errorf("no AI Labs %s items found", spec.Provider)
 	}
+	sortAILabEntriesByDate(entries)
 	items := make([]domain.FeedItem, 0, len(entries))
 	for idx, entry := range entries {
 		if scope.Limit > 0 && len(items) >= scope.Limit {
@@ -111,6 +113,23 @@ func (a AILabsAdapter) Normalize(_ context.Context, scope domain.FetchScope, raw
 		return nil, fmt.Errorf("no usable AI Labs %s items found", spec.Provider)
 	}
 	return items, nil
+}
+
+func sortAILabEntriesByDate(entries []aiLabEntry) {
+	sort.SliceStable(entries, func(i, j int) bool {
+		left := entries[i].PublishedAt
+		right := entries[j].PublishedAt
+		switch {
+		case left != nil && right != nil:
+			return left.After(*right)
+		case left != nil:
+			return true
+		case right != nil:
+			return false
+		default:
+			return false
+		}
+	})
 }
 
 // CachePolicy returns AI Labs feed TTLs.

@@ -157,6 +157,34 @@ func TestLoadFeedMultiPrimarySourceDefaultsToAllViews(t *testing.T) {
 	}
 }
 
+func TestLoadFeedSortsAILabsByPublishedDateDescending(t *testing.T) {
+	ctx := context.Background()
+	db := openAppTestStore(t)
+	defer db.Close()
+	now := time.Date(2026, 5, 10, 10, 0, 0, 0, time.UTC)
+	old := appTestSourceItem("ai-old", "url:https://openai.com/news/old", "OpenAI old", domain.SourceAILabs, 1, now)
+	old.Sources[0].SourceView = "openai"
+	oldPublished := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	old.PublishedAt = &oldPublished
+	newer := appTestSourceItem("ai-new", "url:https://ai.meta.com/blog/new", "Meta new", domain.SourceAILabs, 2, now)
+	newer.Sources[0].SourceView = "meta"
+	newerPublished := time.Date(2026, 5, 15, 0, 0, 0, 0, time.UTC)
+	newer.PublishedAt = &newerPublished
+	if err := db.UpsertFeedItems(ctx, []domain.FeedItem{old, newer}); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(db, httpx.New(time.Second), []SourceAdapter{&fakeAdapter{source: domain.SourceAILabs}})
+
+	snapshot, err := service.LoadFeed(ctx, domain.SourceAILabs, FeedFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := appEntryIDs(snapshot.Entries)
+	if len(ids) != 2 || ids[0] != newer.ID || ids[1] != old.ID {
+		t.Fatalf("AI Labs order = %+v, want newest published first", ids)
+	}
+}
+
 func TestLoadFeedAppliesSearchAndStateFilters(t *testing.T) {
 	ctx := context.Background()
 	db := openAppTestStore(t)

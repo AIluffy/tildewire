@@ -199,6 +199,12 @@ func applySort(entries []domain.FeedEntry, view domain.SourceID, now time.Time, 
 		}
 	}
 	if view != "" && view != domain.SourceAll {
+		if view == domain.SourceAILabs {
+			sort.SliceStable(entries, func(i, j int) bool {
+				return aiLabsEntryNewer(entries[i], entries[j])
+			})
+			return
+		}
 		sort.SliceStable(entries, func(i, j int) bool {
 			return entries[i].PrimarySource().SourceRank < entries[j].PrimarySource().SourceRank
 		})
@@ -210,6 +216,23 @@ func applySort(entries []domain.FeedEntry, view domain.SourceID, now time.Time, 
 		}
 		return entries[i].HotScore > entries[j].HotScore
 	})
+}
+
+func aiLabsEntryNewer(left, right domain.FeedEntry) bool {
+	leftPublished := left.Item.PublishedAt
+	rightPublished := right.Item.PublishedAt
+	switch {
+	case leftPublished != nil && rightPublished != nil && !leftPublished.Equal(*rightPublished):
+		return leftPublished.After(*rightPublished)
+	case leftPublished != nil && rightPublished == nil:
+		return true
+	case leftPublished == nil && rightPublished != nil:
+		return false
+	case !left.Item.LastSeenAt.Equal(right.Item.LastSeenAt):
+		return left.Item.LastSeenAt.After(right.Item.LastSeenAt)
+	default:
+		return left.PrimarySource().SourceRank < right.PrimarySource().SourceRank
+	}
 }
 
 func normalizeFilter(filter FeedFilter) FeedFilter {

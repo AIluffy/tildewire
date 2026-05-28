@@ -48,6 +48,40 @@ func TestAILabsOpenAIRSSNormalizesNewsItems(t *testing.T) {
 	}
 }
 
+func TestAILabsNormalizeSortsByPublishedDateBeforeLimit(t *testing.T) {
+	fetchedAt := time.Date(2026, 5, 18, 10, 0, 0, 0, time.UTC)
+	raw := &domain.FetchResult{
+		Source:    domain.SourceAILabs,
+		FetchedAt: fetchedAt,
+		Body: []byte(`
+<rss version="2.0">
+  <channel>
+    <item>
+      <title>Older update</title>
+      <link>https://openai.com/news/older-update/</link>
+      <pubDate>Mon, 04 May 2026 17:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Newer update</title>
+      <link>https://openai.com/news/newer-update/</link>
+      <pubDate>Mon, 18 May 2026 17:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>`),
+	}
+	items, err := NewAILabsAdapter().Normalize(context.Background(), domain.FetchScope{
+		Source: domain.SourceAILabs,
+		View:   "openai",
+		Limit:  1,
+	}, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].Title != "Newer update" || items[0].Sources[0].SourceRank != 1 {
+		t.Fatalf("items = %+v, want newest item with rank 1", items)
+	}
+}
+
 func TestAILabsHTMLNormalizesProviderNewsItems(t *testing.T) {
 	tests := []struct {
 		name    string
