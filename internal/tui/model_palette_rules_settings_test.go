@@ -10,6 +10,7 @@ import (
 	"charm.land/huh/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/AIluffy/tildewire/internal/app"
 	"github.com/AIluffy/tildewire/internal/config"
 	"github.com/AIluffy/tildewire/internal/domain"
 )
@@ -277,6 +278,7 @@ func TestModelSettingsFormSavesRuntimeConfig(t *testing.T) {
 		t.Fatalf("render missing settings form:\n%s", model.render())
 	}
 	model.view = domain.SourceGitHub
+	model.refreshing = false
 	model.settingsDraft.Theme = "dracula"
 	model.settingsDraft.MarkdownImagePreview = "halfblocks"
 	model.settingsDraft.EnabledSources = []string{"hackernews"}
@@ -291,12 +293,15 @@ func TestModelSettingsFormSavesRuntimeConfig(t *testing.T) {
 	msg := cmd()
 	batch, ok := msg.(tea.BatchMsg)
 	if !ok || len(batch) < 2 {
-		t.Fatalf("settings save should batch config save and feed reload, got %T len=%d", msg, len(batch))
+		t.Fatalf("settings save should batch config save and refresh, got %T len=%d", msg, len(batch))
 	}
-	updatedAfterReload, _ := model.Update(batch[1]())
-	model = updatedAfterReload.(Model)
-	if service.lastLoadView != domain.SourceAll {
-		t.Fatalf("settings source visibility change reloaded %s, want all", service.lastLoadView)
+	updatedAfterRefresh, _ := model.Update(commandMsg(t, batch[1]))
+	model = updatedAfterRefresh.(Model)
+	if service.lastRefreshMode != app.RefreshModeVisible {
+		t.Fatalf("settings source visibility change refreshed %s, want %s", service.lastRefreshMode, app.RefreshModeVisible)
+	}
+	if service.lastLoadView != "" {
+		t.Fatalf("settings refresh should not use load-only path, loaded %s", service.lastLoadView)
 	}
 	model = runOptionalCmd(t, model, batch[0])
 	if !saved {
@@ -439,6 +444,61 @@ func TestModelSettingsSmallScreenPageKeysScrollForm(t *testing.T) {
 	model, _ = updateModelWithKey(t, model, "pgup")
 	if model.settingsScrollOffset != 0 {
 		t.Fatalf("pgup should scroll settings back to top, got offset %d", model.settingsScrollOffset)
+	}
+}
+
+func TestModelSettingsFormQueuesRefreshWhenRefreshAlreadyRunning(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	service := &fakeService{snapshot: snapshot}
+	model := NewModel(service, snapshot, ModelOptions{
+		Config: config.Config{
+			Theme:                "catppuccin",
+			GlamourStyle:         "dark",
+			MarkdownImagePreview: "auto",
+			HTTPCacheTTLHours:    6,
+			EnabledSources:       []string{"github", "hackernews", "producthunt"},
+		},
+	})
+	model.refreshing = true
+	model.refreshID = 7
+	model.openSettingsForm()
+
+	model.settingsDraft.EnabledSources = []string{"hackernews"}
+	model.settingsForm.State = huh.StateCompleted
+	updated, cmd := model.applySettingsFormState(nil)
+	model = updated.(Model)
+	if cmd == nil {
+		t.Fatal("saving settings during refresh should still save config")
+	}
+	if model.pendingRefresh == nil || model.pendingRefresh.mode != app.RefreshModeVisible {
+		t.Fatalf("pending refresh = %+v, want visible refresh", model.pendingRefresh)
+	}
+	if service.lastLoadView != "" {
+		t.Fatalf("settings save during refresh should not load and clear refresh state, loaded %s", service.lastLoadView)
+	}
+	if service.lastRefreshMode != "" {
+		t.Fatalf("settings save during refresh should queue, not start immediate refresh %s", service.lastRefreshMode)
+	}
+
+	model = runOptionalCmd(t, model, cmd)
+	updated, nextCmd := model.Update(snapshotMsg{refreshID: 7, snapshot: snapshot, message: "refresh complete"})
+	model = updated.(Model)
+	if nextCmd == nil {
+		t.Fatal("current refresh completion should start queued settings refresh")
+	}
+	if model.pendingRefresh != nil {
+		t.Fatalf("pending refresh should be consumed, got %+v", model.pendingRefresh)
+	}
+	if !model.refreshing {
+		t.Fatal("queued settings refresh should mark refresh in progress")
+	}
+	if model.refreshID != 8 {
+		t.Fatalf("refresh id = %d, want 8", model.refreshID)
+	}
+	updated, _ = model.Update(commandMsg(t, nextCmd))
+	model = updated.(Model)
+	if service.lastRefreshMode != app.RefreshModeVisible {
+		t.Fatalf("queued refresh mode = %q, want %q", service.lastRefreshMode, app.RefreshModeVisible)
 	}
 }
 
@@ -636,6 +696,101 @@ func TestModelSettingsPasswordInputsHideExistingTokens(t *testing.T) {
 	}
 	if plain := ansi.Strip(model.render()); strings.Contains(plain, "old-ph") {
 		t.Fatalf("product hunt token should be hidden by huh password input:\n%s", plain)
+	}
+}
+
+func TestModelFirstRunDefersStartupRefreshUntilSettingsClose(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	model, service := testModelWithService(snapshot, ModelOptions{FirstRun: true, Config: config.Config{GlamourStyle: "dark"}})
+
+	if !model.startupRefreshDeferred {
+		t.Fatal("first-run settings should defer startup refresh")
+	}
+	if model.refreshing {
+		t.Fatal("first-run settings should not start refreshing before settings close")
+	}
+	if service.lastRefreshMode != "" {
+		t.Fatalf("refresh mode before Init/close = %q, want empty", service.lastRefreshMode)
+	}
+
+	cmd := model.Init()
+	if cmd == nil {
+		t.Fatal("first-run Init should still request terminal background")
+	}
+	if service.lastRefreshMode != "" {
+		t.Fatalf("Init refreshed with mode %q before settings close", service.lastRefreshMode)
+	}
+
+	model, cmd = updateModelWithKey(t, model, "esc")
+	if cmd == nil {
+		t.Fatal("closing first-run settings should start deferred startup refresh")
+	}
+	if model.startupRefreshDeferred {
+		t.Fatal("deferred startup refresh flag should be consumed after closing settings")
+	}
+	if !model.refreshing {
+		t.Fatal("closing first-run settings should mark refresh in progress")
+	}
+	updated, _ := model.Update(commandMsg(t, cmd))
+	model = updated.(Model)
+	if service.lastRefreshMode != app.RefreshModeStartup {
+		t.Fatalf("refresh mode after close = %q, want %q", service.lastRefreshMode, app.RefreshModeStartup)
+	}
+	if model.refreshing {
+		t.Fatal("startup refresh completion should clear refreshing")
+	}
+}
+
+func TestModelFirstRunSettingsSaveRefreshesWithUpdatedRuntimeConfig(t *testing.T) {
+	snapshot := tuiSnapshot(false)
+	service := &fakeService{snapshot: snapshot}
+	model := NewModel(service, snapshot, ModelOptions{
+		FirstRun: true,
+		Config: config.Config{
+			Theme:                "catppuccin",
+			GlamourStyle:         "dark",
+			MarkdownImagePreview: "auto",
+			HTTPCacheTTLHours:    6,
+			EnabledSources:       []string{"github", "hackernews", "producthunt"},
+		},
+	})
+
+	model.settingsDraft.EnabledSources = []string{"hackernews"}
+	model.settingsDraft.ProductHuntToken = "new-ph"
+	model.settingsForm.State = huh.StateCompleted
+	updated, cmd := model.applySettingsFormState(nil)
+	model = updated.(Model)
+	if cmd == nil {
+		t.Fatal("saving first-run settings should save config and start refresh")
+	}
+	if model.startupRefreshDeferred {
+		t.Fatal("saving first-run settings should consume deferred startup refresh")
+	}
+	if !model.refreshing {
+		t.Fatal("saving first-run settings should mark refresh in progress")
+	}
+	if !slices.Equal(service.enabledSources, []domain.SourceID{domain.SourceHackerNews}) {
+		t.Fatalf("enabled sources before refresh = %+v, want hackernews", service.enabledSources)
+	}
+	if service.tokens[domain.SourceProductHunt] != "new-ph" {
+		t.Fatalf("product hunt token before refresh = %q, want new-ph", service.tokens[domain.SourceProductHunt])
+	}
+
+	msg := cmd()
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok || len(batch) < 2 {
+		t.Fatalf("first-run settings save should batch save and refresh, got %T len=%d", msg, len(batch))
+	}
+	updated, _ = model.Update(commandMsg(t, batch[1]))
+	model = updated.(Model)
+	if service.lastRefreshMode != app.RefreshModeStartup {
+		t.Fatalf("refresh mode after first-run save = %q, want %q", service.lastRefreshMode, app.RefreshModeStartup)
+	}
+	if service.lastLoadView != "" {
+		t.Fatalf("first-run save should refresh instead of load-only, loaded %s", service.lastLoadView)
+	}
+	if model.refreshing {
+		t.Fatal("startup refresh completion should clear refreshing")
 	}
 }
 

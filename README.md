@@ -37,7 +37,7 @@ curl -fsSL https://raw.githubusercontent.com/AIluffy/tildewire/main/scripts/inst
 Install a specific release:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AIluffy/tildewire/main/scripts/install.sh | TILDEWIRE_VERSION=v0.3.0 sh
+curl -fsSL https://raw.githubusercontent.com/AIluffy/tildewire/main/scripts/install.sh | TILDEWIRE_VERSION=v0.4.2 sh
 ```
 
 The installer downloads the matching release archive, verifies it against `checksums.txt`, and installs `tildewire` to `${TILDEWIRE_BIN_DIR:-$HOME/.local/bin}`.

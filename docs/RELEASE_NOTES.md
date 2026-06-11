@@ -1,5 +1,19 @@
 # tildewire Release Notes
 
+## v0.4.2
+
+v0.4.2 is a patch release for first-run and runtime settings refresh correctness, plus the Homebrew cask release path.
+
+### Fixed
+
+- First-run settings now defer the startup refresh until the settings form is saved or closed, so source visibility, Product Hunt credentials, GitHub credentials, and HTTP cache TTL changes can be applied before refresh jobs are created.
+- Settings changes made after startup now trigger or queue the appropriate visible-scope refresh when enabled sources, source tokens, or HTTP cache TTL change.
+- Saving refresh-affecting settings while a refresh is already running now queues a follow-up refresh instead of clearing in-progress refresh state with a load-only command.
+
+### Release
+
+- The GoReleaser Homebrew cask configuration continues to publish `tildewire` to the `AIluffy/homebrew-tap` tap when the `v0.4.2` tag is pushed with `HOMEBREW_TAP_GITHUB_TOKEN` configured.
+
 ## v0.4.1
 
 v0.4.1 is a patch release for feed ordering correctness and internal state-boundary hardening after v0.4.0.

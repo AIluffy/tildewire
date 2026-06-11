@@ -48,9 +48,11 @@ type feedState struct {
 }
 
 type refreshState struct {
-	refreshing     bool
-	refreshID      int
-	loadingSpinner spinner.Model
+	refreshing             bool
+	refreshID              int
+	startupRefreshDeferred bool
+	pendingRefresh         *refreshRequest
+	loadingSpinner         spinner.Model
 }
 
 type detailState struct {
