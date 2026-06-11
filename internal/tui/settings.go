@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -42,8 +43,7 @@ var markdownImagePreviewSettingsOptions = []settingsOption{
 
 func (m Model) handleSettingsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Back) {
-		m.closeSettings("settings cancelled")
-		return m, nil
+		return m.closeSettings("settings cancelled")
 	}
 	switch msg.String() {
 	case "pgup":
@@ -93,14 +93,15 @@ func (m Model) applySettingsFormState(cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	case huh.StateCompleted:
 		return m.applySettingsState(cmd)
 	case huh.StateAborted:
-		m.closeSettings("settings cancelled")
-		return m, cmd
+		next, refreshCmd := m.closeSettings("settings cancelled")
+		return next, batchCommands(cmd, refreshCmd)
 	default:
 		return m, cmd
 	}
 }
 
 func (m Model) applySettingsState(cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	previous := m.config
 	next := m.config
 	styles := themeStylesFor(m.settingsDraft.Theme)
 	next.Theme = styles.spec.value
@@ -133,7 +134,31 @@ func (m Model) applySettingsState(cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	}
 	m.closeOverlay()
 	m.message = "settings saved"
+	if refreshCmd := m.consumeDeferredStartupRefreshCmd("settings saved; refreshing sources"); refreshCmd != nil {
+		return m, batchCommands(cmd, m.saveSettingsCmd(next), refreshCmd)
+	}
+	if settingsRefreshRequired(previous, next) {
+		if m.refreshing {
+			m.pendingRefresh = &refreshRequest{mode: app.RefreshModeVisible}
+			m.message = "settings saved; refresh queued"
+			return m, batchCommands(cmd, m.saveSettingsCmd(next))
+		}
+		m.refreshing = true
+		m.refreshID++
+		m.message = "settings saved; refreshing sources"
+		return m, batchCommands(cmd, m.saveSettingsCmd(next), m.refreshWithProgressCmd(m.refreshID, false, app.RefreshModeVisible))
+	}
 	return m, batchCommands(cmd, m.saveSettingsCmd(next), m.loadCmd())
+}
+
+func settingsRefreshRequired(previous, next config.Config) bool {
+	if previous.HTTPCacheTTLHours != next.HTTPCacheTTLHours {
+		return true
+	}
+	if previous.GitHubToken != next.GitHubToken || previous.ProductHuntToken != next.ProductHuntToken {
+		return true
+	}
+	return !slices.Equal(normalizeSettingsEnabledSources(previous.EnabledSources), normalizeSettingsEnabledSources(next.EnabledSources))
 }
 
 func (m *Model) openSettingsForm() {
@@ -156,9 +181,23 @@ func (m *Model) openSettingsForm() {
 	_ = m.settingsForm.Init()
 }
 
-func (m *Model) closeSettings(message string) {
+func (m Model) closeSettings(message string) (Model, tea.Cmd) {
 	m.closeOverlay()
 	m.message = message
+	return m, m.consumeDeferredStartupRefreshCmd(message + "; refreshing sources")
+}
+
+func (m *Model) consumeDeferredStartupRefreshCmd(message string) tea.Cmd {
+	if !m.startupRefreshDeferred {
+		return nil
+	}
+	m.startupRefreshDeferred = false
+	if m.refreshing {
+		return nil
+	}
+	m.refreshing = true
+	m.message = message
+	return m.refreshWithProgressCmd(m.refreshID, false, app.RefreshModeStartup)
 }
 
 func (m *Model) newSettingsForm() *huh.Form {

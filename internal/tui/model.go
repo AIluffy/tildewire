@@ -122,6 +122,8 @@ func NewModel(service FeedService, initial app.Snapshot, options ...ModelOptions
 	}
 	model.rememberFeedSelection()
 	if modelOptions.FirstRun {
+		model.refreshing = false
+		model.startupRefreshDeferred = true
 		model.openSettingsForm()
 		model.message = "first-run settings"
 	}
@@ -130,6 +132,9 @@ func NewModel(service FeedService, initial app.Snapshot, options ...ModelOptions
 
 // Init starts the background refresh after cached data is visible.
 func (m Model) Init() tea.Cmd {
+	if m.startupRefreshDeferred {
+		return tea.RequestBackgroundColor
+	}
 	return batchCommands(
 		m.refreshCmd(m.refreshID, false, app.RefreshModeStartup),
 		m.refreshProgressCmd(m.refreshID),
@@ -238,13 +243,18 @@ func (m Model) handleSnapshotMsg(msg snapshotMsg) (Model, tea.Cmd) {
 		m.lastError = msg.err.Error()
 		m.message = "using cached data; press r to retry"
 	}
-	if msg.nextRefresh != nil {
+	nextRefresh := msg.nextRefresh
+	if nextRefresh == nil && msg.refreshID != 0 && m.pendingRefresh != nil {
+		nextRefresh = m.pendingRefresh
+		m.pendingRefresh = nil
+	}
+	if nextRefresh != nil {
 		m.refreshing = true
 		m.refreshID++
 		if msg.err == nil {
 			m.message = msg.message + "; refreshing visible scope"
 		}
-		return m, m.refreshWithProgressCmd(m.refreshID, msg.nextRefresh.force, msg.nextRefresh.mode)
+		return m, m.refreshWithProgressCmd(m.refreshID, nextRefresh.force, nextRefresh.mode)
 	}
 	return m, nil
 }
